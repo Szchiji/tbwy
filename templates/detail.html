@@ -2,44 +2,90 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Hub</title>
+    <title>详情</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>
-        body { background: #020408; color: #f1f5f9; }
-        @keyframes scroll-slow { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .animate-notice { display: inline-block; white-space: nowrap; animation: scroll-slow 15s linear infinite; }
-        .first-line-only { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-    </style>
+    <style>body { background: #020408; color: #f1f5f9; }</style>
 </head>
 <body class="pb-20">
-    <nav class="sticky top-0 z-50 bg-[#020408]/90 backdrop-blur-md border-b border-white/5">
-        <div class="p-4 max-w-xl mx-auto flex flex-col gap-3">
-            <h1 class="text-xl font-black italic text-blue-500">MATRIX HUB</h1>
-            <div class="bg-blue-600/10 border border-blue-600/20 rounded-lg h-7 flex items-center overflow-hidden">
-                <div class="animate-notice text-[11px] text-blue-300 font-bold w-full">{{ notice }}</div>
+    <div class="bg-blue-600/10 py-2 text-[10px] text-blue-400 text-center border-b border-white/5 mb-4 font-bold">{{ notice }}</div>
+    
+    <div class="max-w-xl mx-auto px-4">
+        <button onclick="history.back()" class="mb-6 text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回首页</button>
+
+        <div class="space-y-4 mb-6">
+            {% if all_media %}
+                {% for m in all_media %}
+                    {% if m.first_media.endswith('.mp4') %}
+                        <video src="{{ m.first_media }}" controls playsinline class="w-full rounded-2xl border border-white/5 bg-black"></video>
+                    {% else %}
+                        <img src="{{ m.first_media }}" class="w-full rounded-2xl shadow-xl border border-white/5">
+                    {% endif %}
+                {% endfor %}
+            {% elif post.first_media %}
+                {% if post.first_media.endswith('.mp4') %}
+                    <video src="{{ post.first_media }}" controls playsinline class="w-full rounded-2xl bg-black"></video>
+                {% else %}<img src="{{ post.first_media }}" class="w-full rounded-2xl shadow-xl">{% endif %}
+            {% endif %}
+        </div>
+
+        <div class="mb-8 p-6 bg-white/5 rounded-3xl border border-white/5">
+            <p class="text-base leading-relaxed whitespace-pre-wrap">{{ post.text }}</p>
+        </div>
+
+        <div class="flex gap-4 mb-10 text-center">
+            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl">
+                <i class="bi bi-heart-fill text-rose-500 text-xl"></i>
+                <div class="text-[10px] text-slate-500 mt-1">{{ post.likes }} 喜欢</div>
+            </div>
+            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl">
+                <i class="bi bi-shield-slash text-amber-500 text-xl"></i>
+                <div class="text-[10px] text-slate-500 mt-1">拉黑/投诉</div>
             </div>
         </div>
-    </nav>
 
-    <main class="max-w-xl mx-auto px-4 mt-6 space-y-3">
-        {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="block">
-            <div class="bg-[#0a0d14] rounded-2xl p-3 flex gap-4 border border-white/5">
-                <div class="w-20 h-20 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
-                    {% if post.first_media %}
-                        {% if post.first_media.endswith('.mp4') %}
-                            <video src="{{ post.first_media }}" class="w-full h-full object-cover"></video>
-                        {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
-                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-800">TEXT</div>{% endif %}
-                </div>
-                <div class="flex-1 min-w-0 flex flex-col justify-center">
-                    <span class="text-[10px] text-blue-500 font-mono mb-1">{{ post.date }}</span>
-                    <p class="text-[14px] text-slate-300 font-medium first-line-only">{{ post.text }}</p>
-                </div>
+        <div class="mb-10">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">管理员备注</h3>
+                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline">编辑备注</button>
             </div>
-        </a>
-        {% endfor %}
-    </main>
+            <div class="p-6 bg-blue-500/5 border border-blue-500/20 rounded-3xl text-sm text-blue-200 italic leading-relaxed">
+                {{ post.admin_note if post.admin_note else '暂无管理员评价内容。' }}
+            </div>
+        </div>
+
+        <div class="space-y-4 pt-8 border-t border-white/5">
+            <h4 class="text-xs font-bold text-slate-500 uppercase">网友评价</h4>
+            {% for c in comments %}
+            <div class="bg-white/5 p-4 rounded-2xl">
+                <p class="text-sm text-slate-300">{{ c.content }}</p>
+                <div class="text-[9px] text-slate-600 mt-2">{{ c.date }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div id="edit-box" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6 backdrop-blur-sm">
+        <div class="bg-[#0a0d14] w-full max-w-sm p-6 rounded-3xl border border-white/10">
+            <h4 class="mb-4 font-bold">修改单条描述</h4>
+            <input type="password" id="pwd" placeholder="管理密码" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-3">
+            <textarea id="note" rows="5" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-4">{{ post.admin_note }}</textarea>
+            <div class="flex gap-2">
+                <button onclick="saveNote({{ post.id }})" class="flex-1 bg-blue-600 py-3 rounded-xl font-bold">提交</button>
+                <button onclick="toggleEdit()" class="flex-1 bg-slate-800 py-3 rounded-xl">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleEdit() { document.getElementById('edit-box').classList.toggle('hidden'); }
+        async function saveNote(pid) {
+            const res = await fetch('/api/set_note', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ post_id: pid, password: document.getElementById('pwd').value, content: document.getElementById('note').value })
+            });
+            if(res.ok) location.reload(); else alert("密码错误");
+        }
+    </script>
 </body>
 </html>
