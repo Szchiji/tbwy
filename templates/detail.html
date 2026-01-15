@@ -1,77 +1,45 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>详情 - Matrix Hub</title>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>详情</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background-color: #050505; color: #e5e5e5; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); }
-    </style>
 </head>
-<body class="pb-24">
-    <div class="max-w-2xl mx-auto px-4 pt-6">
-        <a href="/" class="inline-block mb-6 text-gray-500 text-sm">← 返回首页</a>
-        
+<body class="bg-[#050505] text-gray-200 pb-20">
+    <div class="max-w-xl mx-auto px-4">
+        <button onclick="history.back()" class="my-6 text-blue-500 text-sm">← 返回首页</button>
         <div class="space-y-4 mb-6">
             {% for m in all_media %}
-                <div class="glass rounded-3xl overflow-hidden border border-white/5 shadow-2xl">
-                    {% if m.first_media.lower().endswith('.mp4') %}
-                    <video src="{{ m.first_media }}" controls playsinline class="w-full"></video>
-                    {% else %}
-                    <img src="{{ m.first_media }}" class="w-full h-auto" onclick="window.open(this.src)">
-                    {% endif %}
+                <div class="rounded-2xl overflow-hidden border border-white/5 bg-black">
+                    {% if m.first_media.lower().endswith('.mp4') %}<video src="{{ m.first_media }}" controls playsinline class="w-full"></video>
+                    {% else %}<img src="{{ m.first_media }}" class="w-full">{% endif %}
                 </div>
             {% endfor %}
         </div>
-
-        <div class="px-2">
-            <h1 class="text-xl font-medium mb-2">{{ post.title }}</h1>
-            <p class="text-gray-400 leading-loose whitespace-pre-wrap mb-6">{{ post.text }}</p>
-            
-            <div class="flex items-center gap-4 py-4 border-y border-white/5 mb-8">
-                <button onclick="like()" class="flex items-center gap-2 bg-white/5 px-6 py-2 rounded-full hover:bg-red-500/20 transition">
-                    <span id="like-count">❤️ {{ post.likes }}</span>
-                </button>
-                <span class="text-gray-600 text-sm">{{ post.date }} 发布</span>
+        <div class="bg-white/5 p-6 rounded-3xl mb-8 text-[15px] leading-relaxed whitespace-pre-wrap">{{ post.text }}</div>
+        <button onclick="like()" class="w-full bg-white/5 py-4 rounded-2xl text-center mb-10 border border-white/10 active:bg-blue-500/10 transition">
+            <span id="lk-txt">❤️ {{ post.likes }} 喜欢</span>
+        </button>
+        <div class="space-y-6">
+            <div class="flex gap-2">
+                <input id="cm-in" type="text" placeholder="写下你的评论..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none focus:border-blue-500/50">
+                <button onclick="sendCm()" class="bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold">发布</button>
             </div>
-
-            <div class="space-y-4">
-                <h3 class="font-bold text-gray-300">评论 ({{ comments|length }})</h3>
-                <div class="flex gap-2">
-                    <input id="comment-input" type="text" placeholder="说点什么..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500">
-                    <button onclick="sendComment()" class="bg-blue-600 px-4 py-2 rounded-xl font-bold">发送</button>
-                </div>
-                <div class="pt-4 space-y-4">
-                    {% for c in comments %}
-                    <div class="bg-white/5 p-4 rounded-2xl">
-                        <p class="text-sm">{{ c.content }}</p>
-                        <p class="text-[10px] text-gray-600 mt-2">{{ c.date }}</p>
-                    </div>
-                    {% endfor %}
-                </div>
+            {% for c in comments %}
+            <div class="bg-white/5 p-4 rounded-xl border border-white/5">
+                <p class="text-sm text-gray-300">{{ c.content }}</p>
+                <p class="text-[10px] text-gray-600 mt-2">{{ c.date }}</p>
             </div>
+            {% endfor %}
         </div>
     </div>
-
     <script>
-        function like() {
-            fetch('/api/like/{{post.id}}', {method: 'POST'})
-            .then(() => {
-                const btn = document.getElementById('like-count');
-                let num = parseInt(btn.innerText.replace('❤️ ', ''));
-                btn.innerText = '❤️ ' + (num + 1);
-            });
-        }
-        function sendComment() {
-            const input = document.getElementById('comment-input');
-            if(!input.value) return;
-            fetch('/api/comment/{{post.id}}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({content: input.value})
-            }).then(() => location.reload());
+        function like(){ fetch('/api/like/{{post.id}}',{method:'POST'}).then(()=>{
+            let s = document.getElementById('lk-txt'); s.innerText = '❤️ ' + (parseInt(s.innerText.split(' ')[1])+1) + ' 喜欢';
+        });}
+        function sendCm(){
+            let v = document.getElementById('cm-in').value; if(!v) return;
+            fetch('/api/comment/{{post.id}}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})}).then(()=>location.reload());
         }
     </script>
 </body>
