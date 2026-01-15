@@ -7,117 +7,123 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 </head>
 <body class="bg-[#020408] text-slate-200 pb-20">
-    <div class="bg-blue-600/10 py-2 text-[10px] text-blue-400 text-center border-b border-white/5 mb-4 font-bold">{{ notice }}</div>
-    
-    <div class="max-w-xl mx-auto px-4">
-        <button onclick="history.back()" class="my-6 text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回</button>
+    <div id="app-content">
+        <div class="bg-blue-600/10 py-2 text-[10px] text-blue-400 text-center border-b border-white/5 mb-4 font-bold">{{ notice }}</div>
+        
+        <div class="max-w-xl mx-auto px-4">
+            <button onclick="history.back()" class="my-6 text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回</button>
 
-        <div class="space-y-4 mb-6">
-            {% for m in all_media %}
-                {% if m.first_media %}
-                    {% if m.first_media.lower().endswith('.mp4') %}
+            <div class="space-y-4 mb-6">
+                {% for m in all_media %}
+                    {% if m.first_media %}
                         <div class="w-full rounded-2xl bg-black border border-white/5 overflow-hidden shadow-2xl">
-                            <video src="{{ m.first_media }}" controls playsinline preload="metadata" class="w-full block"></video>
+                        {% if m.first_media.lower().endswith('.mp4') or m.first_media.lower().endswith('.mov') %}
+                            <video src="{{ m.first_media }}#t=0.001" controls playsinline preload="metadata" class="w-full block h-auto aspect-video"></video>
+                        {% else %}
+                            <img src="{{ m.first_media }}" class="w-full h-auto block">
+                        {% endif %}
                         </div>
-                    {% else %}
-                        <img src="{{ m.first_media }}" class="w-full rounded-2xl border border-white/5 shadow-xl">
                     {% endif %}
-                {% endif %}
-            {% endfor %}
-        </div>
-
-        <div class="mb-8 p-6 bg-white/5 rounded-3xl border border-white/5 shadow-inner">
-            <p class="text-[15px] leading-relaxed whitespace-pre-wrap">{{ post.text }}</p>
-        </div>
-
-        <div class="mb-8">
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">管理员描述</h3>
-                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline tracking-tighter">编辑备注</button>
-            </div>
-            <div class="p-5 bg-blue-500/5 border border-blue-500/20 rounded-2xl text-sm text-blue-200 italic leading-relaxed">
-                {{ post.admin_note if post.admin_note else '暂无管理员评价内容' }}
-            </div>
-        </div>
-
-        <div class="flex gap-4 mb-10 text-center">
-            <button onclick="handleLike({{ post.id }})" class="flex-1 bg-white/5 border border-white/10 py-4 rounded-2xl flex flex-col items-center active:scale-95 transition">
-                <i class="bi bi-heart-fill text-rose-500 text-xl"></i>
-                <span class="text-[10px] text-slate-400 mt-1" id="l-count">{{ post.likes }} 喜欢</span>
-            </button>
-            <button onclick="alert('已匿名举报')" class="flex-1 bg-white/5 border border-white/10 py-4 rounded-2xl flex flex-col items-center">
-                <i class="bi bi-shield-slash text-amber-500 text-xl"></i>
-                <span class="text-[10px] text-slate-400 mt-1">拉黑/举报</span>
-            </button>
-        </div>
-
-        <div class="space-y-6">
-            <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest">网友评价</h4>
-            <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
-                <textarea id="c-input" rows="2" placeholder="发个评价吧..." class="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm outline-none focus:border-blue-500 text-white"></textarea>
-                <button onclick="subComment({{ post.id }})" class="w-full bg-blue-600 mt-3 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20">提交评论</button>
-            </div>
-            <div class="space-y-4" id="comment-box">
-                {% for c in comments %}
-                <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-start group">
-                    <div class="flex-1">
-                        <p class="text-sm text-slate-300">{{ c.content }}</p>
-                        <div class="text-[9px] text-slate-600 mt-2">{{ c.date }}</div>
-                    </div>
-                    <button onclick="delComment({{ c.id }})" class="text-[10px] text-rose-900 opacity-50 group-hover:opacity-100 px-2 py-1">删除</button>
-                </div>
-                {% else %}
-                <p class="text-center text-xs text-slate-600 py-4 italic">暂无评价内容</p>
                 {% endfor %}
+            </div>
+
+            <div class="mb-8 p-6 bg-white/5 rounded-3xl border border-white/5">
+                <p class="text-[15px] leading-relaxed whitespace-pre-wrap">{{ post.text }}</p>
+            </div>
+
+            <div class="mb-8">
+                <div class="flex justify-between items-center mb-3 text-xs font-bold text-slate-500">
+                    <span>管理员描述</span>
+                    <button onclick="document.getElementById('eb').classList.remove('hidden')" class="text-blue-500 underline">编辑</button>
+                </div>
+                <div class="p-5 bg-blue-500/5 border border-blue-500/20 rounded-2xl text-sm text-blue-200 italic">
+                    {{ post.admin_note if post.admin_note else '暂无备注' }}
+                </div>
+            </div>
+
+            <div class="flex gap-4 mb-10">
+                <button id="btn-like" onclick="doLike({{ post.id }})" class="flex-1 bg-white/5 border border-white/10 py-4 rounded-2xl flex flex-col items-center active:scale-95 transition">
+                    <i class="bi bi-heart-fill text-rose-500 text-xl"></i>
+                    <span class="text-[10px] text-slate-400 mt-1" id="l-count">{{ post.likes }} 喜欢</span>
+                </button>
+                <button onclick="doBlock({{ post.id }})" class="flex-1 bg-white/5 border border-white/10 py-4 rounded-2xl flex flex-col items-center">
+                    <i class="bi bi-shield-slash text-amber-500 text-xl"></i>
+                    <span class="text-[10px] text-slate-400 mt-1">拉黑/隐藏</span>
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <h4 class="text-xs font-bold text-slate-500 uppercase tracking-widest">网友评价</h4>
+                <div class="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <textarea id="ci" rows="2" placeholder="发个评价..." class="w-full bg-transparent p-2 text-sm outline-none text-white"></textarea>
+                    <button onclick="subC({{ post.id }})" class="w-full bg-blue-600 mt-2 py-2 rounded-xl text-sm font-bold">提交评论</button>
+                </div>
+                <div class="space-y-4">
+                    {% for c in comments %}
+                    <div class="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-start group">
+                        <div class="flex-1">
+                            <p class="text-sm text-slate-300">{{ c.content }}</p>
+                            <div class="text-[9px] text-slate-600 mt-2">{{ c.date }}</div>
+                        </div>
+                        <button onclick="delC({{ c.id }})" class="text-[10px] text-rose-900 opacity-0 group-hover:opacity-100 px-2 py-1">删除</button>
+                    </div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="eb" class="hidden fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-6 backdrop-blur-sm">
+    <div id="eb" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6">
         <div class="bg-[#0a0d14] w-full max-w-sm p-6 rounded-3xl border border-white/10">
-            <h4 class="text-blue-500 font-bold mb-4 text-center">管理员描述管理</h4>
-            <input type="password" id="ap" placeholder="管理密码" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-3 text-white outline-none">
-            <textarea id="an" rows="5" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-4 text-white outline-none">{{ post.admin_note }}</textarea>
-            <div class="flex gap-2">
-                <button onclick="saveNote({{ post.id }})" class="flex-1 bg-blue-600 py-3 rounded-xl font-bold">更新备注</button>
-                <button onclick="toggleEdit()" class="flex-1 bg-slate-800 py-3 rounded-xl">取消</button>
-            </div>
+            <input type="password" id="ap" placeholder="密码" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-3 text-white">
+            <textarea id="an" rows="5" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-4 text-white">{{ post.admin_note }}</textarea>
+            <button onclick="saveN({{ post.id }})" class="w-full bg-blue-600 py-3 rounded-xl font-bold">保存</button>
+            <button onclick="document.getElementById('eb').classList.add('hidden')" class="w-full mt-2 py-2 text-xs text-slate-500">取消</button>
         </div>
     </div>
 
     <script>
-        function toggleEdit() { document.getElementById('eb').classList.toggle('hidden'); }
-        async function handleLike(pid) {
-            const res = await fetch(`/api/like/${pid}`, { method: 'POST' });
+        // 1. 点赞限流初始化
+        if(localStorage.getItem('L_'+ {{ post.id }})) document.getElementById('btn-like').style.opacity = '0.3';
+
+        async function doLike(pid) {
+            if(localStorage.getItem('L_'+pid)) return alert("点过赞啦");
+            const res = await fetch(`/api/like/${pid}`, {method:'POST'});
             if(res.ok) {
-                const el = document.getElementById('l-count');
-                el.innerText = (parseInt(el.innerText) + 1) + " 喜欢";
+                document.getElementById('l-count').innerText = (parseInt(document.getElementById('l-count').innerText)+1)+' 喜欢';
+                localStorage.setItem('L_'+pid, '1');
+                document.getElementById('btn-like').style.opacity = '0.3';
             }
         }
-        async function subComment(pid) {
-            const val = document.getElementById('c-input').value;
+
+        // 2. 拉黑并隐藏
+        function doBlock(pid) {
+            if(confirm("确定拉黑并隐藏此内容吗？")){
+                let bl = JSON.parse(localStorage.getItem('blacklist') || '[]');
+                bl.push(pid);
+                localStorage.setItem('blacklist', JSON.stringify(bl));
+                document.getElementById('app-content').innerHTML = '<div class="h-screen flex items-center justify-center text-slate-600">内容已屏蔽，正在返回...</div>';
+                setTimeout(()=> location.href='/', 1000);
+            }
+        }
+
+        async function subC(pid) {
+            const val = document.getElementById('ci').value;
             if(!val.trim()) return;
-            const res = await fetch('/api/comment', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ post_id: pid, content: val })
-            });
+            const res = await fetch('/api/comment', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({post_id:pid, content:val})});
             if(res.ok) location.reload();
         }
-        async function delComment(cid) {
-            const pwd = prompt("请输入管理密码以删除评论：");
-            if (!pwd) return;
-            const res = await fetch('/api/delete_comment', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ comment_id: cid, password: pwd })
-            });
-            if(res.ok) location.reload(); else alert("密码错误");
+
+        async function delC(cid) {
+            const pw = prompt("密码：");
+            if(!pw) return;
+            const res = await fetch('/api/delete_comment', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({comment_id:cid, password:pw})});
+            if(res.ok) location.reload(); else alert("验证失败");
         }
-        async function saveNote(pid) {
-            const res = await fetch('/api/set_note', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ post_id: pid, password: document.getElementById('ap').value, content: document.getElementById('an').value })
-            });
-            if(res.ok) location.reload(); else alert("密码验证失败");
+
+        async function saveN(pid) {
+            const res = await fetch('/api/set_note', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({post_id:pid, password:document.getElementById('ap').value, content:document.getElementById('an').value})});
+            if(res.ok) location.reload(); else alert("失败");
         }
     </script>
 </body>
