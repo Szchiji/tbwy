@@ -7,52 +7,39 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         body { background: #020408; color: #f1f5f9; }
-        .list-card { background: #0a0d14; border: 1px solid rgba(255,255,255,0.08); }
+        @keyframes scroll-slow { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .animate-notice { display: inline-block; white-space: nowrap; animation: scroll-slow 15s linear infinite; }
+        .first-line-only { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
 <body class="pb-20">
-    <nav class="sticky top-0 z-50 bg-[#020408]/80 backdrop-blur-lg border-b border-white/5 p-4">
-        <div class="max-w-xl mx-auto flex flex-col gap-3">
-            <div class="flex justify-between items-center">
-                <h1 class="text-xl font-black italic text-blue-500">MATRIX HUB</h1>
-                <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                    <span class="text-[10px] text-slate-500 uppercase">System Online</span>
-                </div>
+    <nav class="sticky top-0 z-50 bg-[#020408]/90 backdrop-blur-md border-b border-white/5">
+        <div class="p-4 max-w-xl mx-auto flex flex-col gap-3">
+            <h1 class="text-xl font-black italic text-blue-500">MATRIX HUB</h1>
+            <div class="bg-blue-600/10 border border-blue-600/20 rounded-lg h-7 flex items-center overflow-hidden">
+                <div class="animate-notice text-[11px] text-blue-300 font-bold w-full">{{ notice }}</div>
             </div>
-            <div class="bg-blue-600/10 border border-blue-600/20 rounded-xl px-3 py-1.5 flex items-center gap-2 overflow-hidden">
-                <i class="bi bi-megaphone-fill text-blue-500 text-xs"></i>
-                <marquee class="text-[11px] text-blue-300 font-bold tracking-widest">{{ notice }}</marquee>
-            </div>
-            <form action="/" method="GET" class="relative">
-                <input type="text" name="q" value="{{ q }}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500">
-                <button type="submit" class="absolute right-3 top-2.5 text-slate-500"><i class="bi bi-search"></i></button>
-            </form>
         </div>
     </nav>
 
     <main class="max-w-xl mx-auto px-4 mt-6 space-y-3">
         {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="block active:scale-[0.98] transition">
-            <div class="list-card rounded-2xl p-3 flex gap-4">
-                <div class="w-24 h-24 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0 border border-white/5">
-                    {% if post.first_media %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">
-                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-700">TEXT ONLY</div>{% endif %}
+        <a href="/post/{{ post.id }}" class="block">
+            <div class="bg-[#0a0d14] rounded-2xl p-3 flex gap-4 border border-white/5">
+                <div class="w-20 h-20 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
+                    {% if post.first_media %}
+                        {% if post.first_media.endswith('.mp4') %}
+                            <video src="{{ post.first_media }}" class="w-full h-full object-cover"></video>
+                        {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
+                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-800">TEXT</div>{% endif %}
                 </div>
-                <div class="flex-1 min-w-0 py-1">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-[10px] text-blue-500 font-mono">{{ post.date }}</span>
-                        {% if post.is_pinned %}<i class="bi bi-pin-angle-fill text-rose-500 text-xs"></i>{% endif %}
-                    </div>
-                    <p class="text-[13px] text-slate-300 line-clamp-3 leading-relaxed">{{ post.text }}</p>
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                    <span class="text-[10px] text-blue-500 font-mono mb-1">{{ post.date }}</span>
+                    <p class="text-[14px] text-slate-300 font-medium first-line-only">{{ post.text }}</p>
                 </div>
             </div>
         </a>
         {% endfor %}
     </main>
-
-    <a href="https://t.me/{{ bot_name }}" target="_blank" class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 rounded-full shadow-2xl flex items-center justify-center text-white text-2xl z-50">
-        <i class="bi bi-chat-dots-fill"></i>
-    </a>
 </body>
 </html>
