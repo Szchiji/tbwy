@@ -2,71 +2,44 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>详情 - Matrix Hub</title>
+    <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>body { background: #020408; color: #f1f5f9; }</style>
+    <style>
+        body { background: #020408; color: #f1f5f9; }
+        @keyframes scroll-slow { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+        .animate-notice { display: inline-block; white-space: nowrap; animation: scroll-slow 15s linear infinite; }
+        .first-line-only { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
 </head>
-<body class="pb-10">
-    <div class="bg-blue-600/10 py-2 text-center text-[10px] text-blue-400 border-b border-blue-500/20 font-bold tracking-widest">{{ notice }}</div>
-
-    <div class="max-w-xl mx-auto px-4">
-        <header class="py-6 flex items-center justify-between">
-            <button onclick="history.back()" class="text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回首页</button>
-            <div class="text-[10px] text-slate-500">FROM: <span class="text-blue-400">@{{ post.username }}</span></div>
-        </header>
-
-        <div class="rounded-3xl overflow-hidden bg-black mb-6 border border-white/5">
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                data-telegram-post="{{ post.username }}/{{ post.msg_id }}" data-width="100%" data-dark="1"></script>
-        </div>
-
-        <div class="flex justify-between items-center mb-8 bg-white/5 p-4 rounded-2xl border border-white/5">
-            <button onclick="like({{ post.id }})" class="flex items-center gap-2 text-slate-300">
-                <i class="bi bi-heart-fill text-rose-500"></i> <span id="like-count">{{ post.likes }}</span>
-            </button>
-            <span class="text-[10px] text-slate-600 font-mono italic underline">#POST-ID: {{ post.id }}</span>
-        </div>
-
-        <div class="p-6 bg-white/5 rounded-3xl mb-8 border border-white/5">
-            <p class="text-sm leading-loose whitespace-pre-wrap text-slate-200">{{ post.text }}</p>
-        </div>
-
-        <div class="mt-10 border-t border-white/5 pt-8">
-            <div class="flex justify-between items-center mb-4">
-                <div class="flex items-center gap-2"><i class="bi bi-shield-lock-fill text-yellow-500"></i><h3 class="text-xs font-bold text-slate-400">管理员描述</h3></div>
-                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline">编辑备注</button>
-            </div>
-            
-            <div class="p-5 bg-yellow-500/5 border border-yellow-500/10 rounded-3xl">
-                <p class="text-sm text-yellow-100/70 leading-relaxed italic" id="display-note">
-                    {{ post.admin_note if post.admin_note else '暂无管理员评价内容。' }}
-                </p>
-            </div>
-
-            <div id="edit-panel" class="hidden mt-4 p-5 bg-slate-900 rounded-3xl border border-blue-500/30">
-                <input type="password" id="admin-pwd" placeholder="管理密码" class="w-full bg-black border border-white/10 rounded-xl px-4 py-2 text-xs mb-3">
-                <textarea id="admin-text" rows="4" class="w-full bg-black border border-white/10 rounded-xl px-4 py-2 text-xs mb-3">{{ post.admin_note }}</textarea>
-                <button onclick="saveNote({{ post.id }})" class="w-full bg-blue-600 py-3 rounded-xl text-xs font-bold uppercase tracking-widest">保存更新</button>
+<body class="pb-20">
+    <nav class="sticky top-0 z-50 bg-[#020408]/90 backdrop-blur-md border-b border-white/5">
+        <div class="p-4 max-w-xl mx-auto flex flex-col gap-3">
+            <h1 class="text-xl font-black italic text-blue-500">MATRIX HUB</h1>
+            <div class="bg-blue-600/10 border border-blue-600/20 rounded-lg h-7 flex items-center overflow-hidden">
+                <div class="animate-notice text-[11px] text-blue-300 font-bold w-full">{{ notice }}</div>
             </div>
         </div>
-    </div>
+    </nav>
 
-    <script>
-        function toggleEdit() { document.getElementById('edit-panel').classList.toggle('hidden'); }
-        async function like(id) {
-            await fetch(`/api/like/${id}`, {method:'POST'});
-            document.getElementById('like-count').innerText = parseInt(document.getElementById('like-count').innerText) + 1;
-        }
-        async function saveNote(pid) {
-            const pwd = document.getElementById('admin-pwd').value;
-            const text = document.getElementById('admin-text').value;
-            const res = await fetch('/api/set_note', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ post_id: pid, password: pwd, content: text })
-            });
-            if(res.ok) { alert("备注已成功保存！"); location.reload(); } else { alert("权限验证失败！"); }
-        }
-    </script>
+    <main class="max-w-xl mx-auto px-4 mt-6 space-y-3">
+        {% for post in posts %}
+        <a href="/post/{{ post.id }}" class="block">
+            <div class="bg-[#0a0d14] rounded-2xl p-3 flex gap-4 border border-white/5">
+                <div class="w-20 h-20 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0">
+                    {% if post.first_media %}
+                        {% if post.first_media.endswith('.mp4') %}
+                            <video src="{{ post.first_media }}" class="w-full h-full object-cover"></video>
+                        {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
+                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-800">TEXT</div>{% endif %}
+                </div>
+                <div class="flex-1 min-w-0 flex flex-col justify-center">
+                    <span class="text-[10px] text-blue-500 font-mono mb-1">{{ post.date }}</span>
+                    <p class="text-[14px] text-slate-300 font-medium first-line-only">{{ post.text }}</p>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </main>
 </body>
 </html>
