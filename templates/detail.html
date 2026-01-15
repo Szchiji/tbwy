@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>详情 - Matrix Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>body { background: #020408; color: #f1f5f9; }</style>
+</head>
+<body class="pb-10">
+    <div class="max-w-xl mx-auto px-4">
+        <header class="py-6 flex items-center justify-between">
+            <button onclick="history.back()" class="text-blue-500 text-sm flex items-center gap-1">
+                <i class="bi bi-chevron-left"></i> 返回
+            </button>
+            <div class="text-[10px] text-slate-500 uppercase font-mono">Detail View</div>
+        </header>
+
+        <div class="rounded-3xl overflow-hidden bg-black mb-6 shadow-2xl border border-white/5">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                data-telegram-post="{{ post.username }}/{{ post.msg_id }}" data-width="100%" data-dark="1"></script>
+        </div>
+
+        <div class="p-6 bg-white/5 rounded-3xl mb-8 border border-white/5">
+            <p class="text-sm leading-loose whitespace-pre-wrap text-slate-200">{{ post.text }}</p>
+        </div>
+
+        <div class="space-y-4">
+            <h3 class="text-xs font-bold text-slate-500 px-2 uppercase tracking-widest">评论互动</h3>
+            <div class="space-y-3">
+                {% for c in comments %}
+                <div class="bg-white/5 p-4 rounded-2xl text-xs border border-white/5">
+                    <p class="text-slate-300 mb-2">{{ c.content }}</p>
+                    <span class="text-[9px] text-slate-600 font-mono">{{ c.date }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-6 flex gap-2">
+                <input type="text" id="c-input" placeholder="写下你的看法..." class="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs outline-none focus:border-blue-500 transition">
+                <button onclick="sendC()" class="bg-blue-600 px-6 py-3 rounded-xl text-xs font-bold">提交</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function sendC() {
+            const val = document.getElementById('c-input').value;
+            if(!val) return;
+            const res = await fetch('/api/comment', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({post_id: {{ post.id }}, content: val})
+            });
+            if(res.ok) location.reload();
+        }
+    </script>
+</body>
+</html>
