@@ -19,20 +19,34 @@ def get_db():
     return conn
 
 def init_db():
+    """数据库自适应进化：自动检查并补齐缺失字段"""
     if not os.path.exists(DB_DIR): os.makedirs(DB_DIR, exist_ok=True)
     with get_db() as conn:
+        # 1. 确保基础表存在
         conn.execute('''CREATE TABLE IF NOT EXISTS posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
             msg_id INTEGER, text TEXT, username TEXT, title TEXT, 
-            date TEXT, media_group_id TEXT, first_media TEXT, UNIQUE(msg_id, username))''')
+            date TEXT, likes INTEGER DEFAULT 0, UNIQUE(msg_id, username))''')
+        
+        # 2. 动态检测并补齐字段 (实现类似 NoSQL 的灵活性)
+        existing_cols = [row['name'] for row in conn.execute("PRAGMA table_info(posts)").fetchall()]
+        needed_cols = {
+            "media_group_id": "TEXT",
+            "first_media": "TEXT"
+        }
+        for col, col_type in needed_cols.items():
+            if col not in existing_cols:
+                conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {col_type}")
+                print(f"检测到新版本需求，已自动补齐列: {col}")
+
+        # 3. 其他表
         conn.execute('''CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, 
-            content TEXT, date TEXT)''')
+            id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT)''')
         conn.execute('''CREATE TABLE IF NOT EXISTS filters (
             id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT UNIQUE)''')
 init_db()
 
-# --- 辅助功能：获取图片 & 同步逻辑 ---
+# --- 功能辅助函数 ---
 def get_file_link(file_id):
     try:
         file_info = bot.get_file(file_id)
@@ -54,7 +68,7 @@ def perform_sync():
             except: continue
     return deleted_count
 
-# --- Webhook 核心逻辑 ---
+# --- Webhook 处理逻辑 ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
     json_str = request.get_data().decode('utf-8')
@@ -66,7 +80,7 @@ def webhook():
         chat_id, user_id = str(p.chat.id), str(p.from_user.id if p.from_user else "")
         is_me = chat_id == MY_CHAT_ID or user_id == MY_CHAT_ID
 
-        # 管理员指令处理
+        # 管理指令
         if is_me and text.startswith("/"):
             if text == "/sync":
                 count = perform_sync()
@@ -75,34 +89,30 @@ def webhook():
                 word = text.replace("/add ", "").strip()
                 with get_db() as conn: conn.execute("INSERT OR IGNORE INTO filters (word) VALUES (?)", (word,))
                 bot.send_message(MY_CHAT_ID, f"🚫 已加禁词: {word}")
-            elif text == "/list":
-                with get_db() as conn:
-                    words = [r['word'] for r in conn.execute("SELECT word FROM filters").fetchall()]
-                bot.send_message(MY_CHAT_ID, "📝 禁词库:\n" + "\n".join(words) if words else "库为空")
             return 'OK'
 
-        # 多图去重逻辑
+        # 多图去重
         mg_id = p.media_group_id
         if mg_id:
             with get_db() as conn:
                 if conn.execute("SELECT id FROM posts WHERE media_group_id=?", (mg_id,)).fetchone():
                     return 'OK'
 
-        # 抓取首张媒体作为缩略图
+        # 抓取缩略图
         thumb = None
         if p.photo: thumb = get_file_link(p.photo[-1].file_id)
         elif p.video: thumb = get_file_link(p.video.thumb.file_id) if p.video.thumb else None
 
-        # 保存到数据库
+        # 写入数据
         with get_db() as conn:
             conn.execute('''INSERT INTO posts (msg_id, text, username, title, date, media_group_id, first_media) 
                 VALUES (?,?,?,?,?,?,?) ON CONFLICT(msg_id, username) DO UPDATE SET 
                 text=excluded.text, first_media=excluded.first_media''', 
-                (p.message_id, text, p.chat.username or "Private", p.chat.title or "情报站", 
+                (p.message_id, text, p.chat.username or "Private", p.chat.title or "情报", 
                  datetime.now().strftime("%Y-%m-%d"), mg_id, thumb))
     return 'OK'
 
-# --- 路由 ---
+# --- 路由逻辑 ---
 @app.route('/')
 def index():
     bot_info = bot.get_me()
