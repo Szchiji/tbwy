@@ -8,51 +8,64 @@
     <style>body { background: #020408; color: #f1f5f9; }</style>
 </head>
 <body class="pb-10">
+    <div class="bg-blue-600/10 py-2 text-center text-[10px] text-blue-400 border-b border-blue-500/20 font-bold tracking-widest">{{ notice }}</div>
+
     <div class="max-w-xl mx-auto px-4">
         <header class="py-6 flex items-center justify-between">
-            <button onclick="history.back()" class="text-blue-500 text-sm flex items-center gap-1">
-                <i class="bi bi-chevron-left"></i> 返回
-            </button>
-            <div class="text-[10px] text-slate-500 uppercase font-mono">Detail View</div>
+            <button onclick="history.back()" class="text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回首页</button>
+            <div class="text-[10px] text-slate-500">FROM: <span class="text-blue-400">@{{ post.username }}</span></div>
         </header>
 
-        <div class="rounded-3xl overflow-hidden bg-black mb-6 shadow-2xl border border-white/5">
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
+        <div class="rounded-3xl overflow-hidden bg-black mb-6 border border-white/5">
+            <script async src="https://telegram.org/js/telegram-widget.js?22" 
                 data-telegram-post="{{ post.username }}/{{ post.msg_id }}" data-width="100%" data-dark="1"></script>
+        </div>
+
+        <div class="flex justify-between items-center mb-8 bg-white/5 p-4 rounded-2xl border border-white/5">
+            <button onclick="like({{ post.id }})" class="flex items-center gap-2 text-slate-300">
+                <i class="bi bi-heart-fill text-rose-500"></i> <span id="like-count">{{ post.likes }}</span>
+            </button>
+            <span class="text-[10px] text-slate-600 font-mono italic underline">#POST-ID: {{ post.id }}</span>
         </div>
 
         <div class="p-6 bg-white/5 rounded-3xl mb-8 border border-white/5">
             <p class="text-sm leading-loose whitespace-pre-wrap text-slate-200">{{ post.text }}</p>
         </div>
 
-        <div class="space-y-4">
-            <h3 class="text-xs font-bold text-slate-500 px-2 uppercase tracking-widest">评论互动</h3>
-            <div class="space-y-3">
-                {% for c in comments %}
-                <div class="bg-white/5 p-4 rounded-2xl text-xs border border-white/5">
-                    <p class="text-slate-300 mb-2">{{ c.content }}</p>
-                    <span class="text-[9px] text-slate-600 font-mono">{{ c.date }}</span>
-                </div>
-                {% endfor %}
+        <div class="mt-10 border-t border-white/5 pt-8">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-2"><i class="bi bi-shield-lock-fill text-yellow-500"></i><h3 class="text-xs font-bold text-slate-400">管理员描述</h3></div>
+                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline">编辑备注</button>
             </div>
-            
-            <div class="mt-6 flex gap-2">
-                <input type="text" id="c-input" placeholder="写下你的看法..." class="flex-1 bg-white/5 border border-white/5 rounded-xl px-4 py-3 text-xs outline-none focus:border-blue-500 transition">
-                <button onclick="sendC()" class="bg-blue-600 px-6 py-3 rounded-xl text-xs font-bold">提交</button>
+            
+            <div class="p-5 bg-yellow-500/5 border border-yellow-500/10 rounded-3xl">
+                <p class="text-sm text-yellow-100/70 leading-relaxed italic" id="display-note">
+                    {{ post.admin_note if post.admin_note else '暂无管理员评价内容。' }}
+                </p>
+            </div>
+
+            <div id="edit-panel" class="hidden mt-4 p-5 bg-slate-900 rounded-3xl border border-blue-500/30">
+                <input type="password" id="admin-pwd" placeholder="管理密码" class="w-full bg-black border border-white/10 rounded-xl px-4 py-2 text-xs mb-3">
+                <textarea id="admin-text" rows="4" class="w-full bg-black border border-white/10 rounded-xl px-4 py-2 text-xs mb-3">{{ post.admin_note }}</textarea>
+                <button onclick="saveNote({{ post.id }})" class="w-full bg-blue-600 py-3 rounded-xl text-xs font-bold uppercase tracking-widest">保存更新</button>
             </div>
         </div>
     </div>
 
     <script>
-        async function sendC() {
-            const val = document.getElementById('c-input').value;
-            if(!val) return;
-            const res = await fetch('/api/comment', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({post_id: {{ post.id }}, content: val})
+        function toggleEdit() { document.getElementById('edit-panel').classList.toggle('hidden'); }
+        async function like(id) {
+            await fetch(`/api/like/${id}`, {method:'POST'});
+            document.getElementById('like-count').innerText = parseInt(document.getElementById('like-count').innerText) + 1;
+        }
+        async function saveNote(pid) {
+            const pwd = document.getElementById('admin-pwd').value;
+            const text = document.getElementById('admin-text').value;
+            const res = await fetch('/api/set_note', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ post_id: pid, password: pwd, content: text })
             });
-            if(res.ok) location.reload();
+            if(res.ok) { alert("备注已成功保存！"); location.reload(); } else { alert("权限验证失败！"); }
         }
     </script>
 </body>
