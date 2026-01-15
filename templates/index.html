@@ -10,24 +10,20 @@
         @keyframes scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
         .animate-notice { display: inline-block; white-space: nowrap; animation: scroll 15s linear infinite; }
         .text-preview {
-            display: -webkit-box;
-            -webkit-line-clamp: 4;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            white-space: pre-wrap; /* 保留分行 */
-            word-break: break-all;
+            display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical;
+            overflow: hidden; white-space: pre-wrap; word-break: break-all; line-height: 1.4;
         }
     </style>
 </head>
 <body class="pb-10">
-    <nav class="sticky top-0 z-50 bg-[#020408]/95 backdrop-blur-md border-b border-white/5 p-4">
+    <nav class="sticky top-0 z-50 bg-[#020408]/95 backdrop-blur-md border-b border-white/5 p-4 text-center">
         <div class="max-w-xl mx-auto space-y-3">
-            <h1 class="text-xl font-black italic text-blue-500 text-center tracking-tighter">MATRIX HUB</h1>
+            <h1 class="text-xl font-black italic text-blue-500 tracking-tighter">MATRIX HUB</h1>
             <div class="bg-blue-600/10 border border-blue-600/20 rounded-lg h-7 flex items-center overflow-hidden">
                 <div class="animate-notice text-[11px] text-blue-300 font-bold w-full">{{ notice }}</div>
             </div>
             <form action="/" method="GET" class="relative">
-                <input type="text" name="q" value="{{ q }}" placeholder="搜索情报..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500">
+                <input type="text" name="q" value="{{ q }}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500 text-white">
                 <button type="submit" class="absolute right-3 top-2.5 text-slate-500"><i class="bi bi-search"></i></button>
             </form>
         </div>
@@ -35,17 +31,17 @@
 
     <main class="max-w-xl mx-auto px-4 mt-6 space-y-3">
         {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="block active:opacity-80 transition">
+        <a href="/post/{{ post.id }}" class="block active:scale-95 transition">
             <div class="bg-[#0a0d14] rounded-2xl p-3 flex gap-4 border border-white/5 items-start">
                 <div class="w-24 h-24 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0 border border-white/5">
                     {% if post.first_media %}
-                        {% if post.first_media.endswith('.mp4') %}<video src="{{ post.first_media }}" class="w-full h-full object-cover"></video>
+                        {% if post.first_media.lower().endswith('.mp4') %}<video src="{{ post.first_media }}" class="w-full h-full object-cover"></video>
                         {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
-                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-800">NO MEDIA</div>{% endif %}
+                    {% else %}<div class="w-full h-full flex items-center justify-center text-[10px] text-slate-800 italic">TEXT ONLY</div>{% endif %}
                 </div>
                 <div class="flex-1 min-w-0">
-                    <div class="text-[10px] text-blue-500 font-mono mb-1">{{ post.date }}</div>
-                    <p class="text-[13px] text-slate-300 leading-snug text-preview">{{ post.text }}</p>
+                    <div class="text-[9px] text-blue-500 font-mono mb-1 uppercase tracking-tighter">{{ post.date }}</div>
+                    <p class="text-[13px] text-slate-300 text-preview">{{ post.text }}</p>
                 </div>
             </div>
         </a>
