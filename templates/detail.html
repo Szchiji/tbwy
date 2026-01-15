@@ -5,73 +5,52 @@
     <title>详情</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>body { background: #020408; color: #f1f5f9; }</style>
 </head>
-<body class="pb-20">
+<body class="bg-[#020408] text-slate-200 pb-20">
     <div class="bg-blue-600/10 py-2 text-[10px] text-blue-400 text-center border-b border-white/5 mb-4 font-bold">{{ notice }}</div>
     
     <div class="max-w-xl mx-auto px-4">
-        <button onclick="history.back()" class="mb-6 text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回首页</button>
+        <button onclick="history.back()" class="my-6 text-blue-500 text-sm flex items-center gap-1"><i class="bi bi-chevron-left"></i> 返回</button>
 
         <div class="space-y-4 mb-6">
-            {% if all_media %}
-                {% for m in all_media %}
+            {% for m in all_media %}
+                {% if m.first_media %}
                     {% if m.first_media.endswith('.mp4') %}
-                        <video src="{{ m.first_media }}" controls playsinline class="w-full rounded-2xl border border-white/5 bg-black"></video>
+                        <video src="{{ m.first_media }}" controls playsinline class="w-full rounded-2xl bg-black border border-white/5"></video>
                     {% else %}
                         <img src="{{ m.first_media }}" class="w-full rounded-2xl shadow-xl border border-white/5">
                     {% endif %}
-                {% endfor %}
-            {% elif post.first_media %}
-                {% if post.first_media.endswith('.mp4') %}
-                    <video src="{{ post.first_media }}" controls playsinline class="w-full rounded-2xl bg-black"></video>
-                {% else %}<img src="{{ post.first_media }}" class="w-full rounded-2xl shadow-xl">{% endif %}
-            {% endif %}
+                {% endif %}
+            {% endfor %}
         </div>
 
-        <div class="mb-8 p-6 bg-white/5 rounded-3xl border border-white/5">
+        <div class="mb-8 p-6 bg-white/5 rounded-3xl border border-white/5 shadow-inner">
             <p class="text-base leading-relaxed whitespace-pre-wrap">{{ post.text }}</p>
         </div>
 
         <div class="flex gap-4 mb-10 text-center">
-            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl">
-                <i class="bi bi-heart-fill text-rose-500 text-xl"></i>
-                <div class="text-[10px] text-slate-500 mt-1">{{ post.likes }} 喜欢</div>
-            </div>
-            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl">
-                <i class="bi bi-shield-slash text-amber-500 text-xl"></i>
-                <div class="text-[10px] text-slate-500 mt-1">拉黑/投诉</div>
-            </div>
+            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl"><i class="bi bi-heart-fill text-rose-500 text-xl"></i><div class="text-[10px] text-slate-500 mt-1">喜欢</div></div>
+            <div class="flex-1 bg-white/5 border border-white/10 p-4 rounded-2xl"><i class="bi bi-shield-slash text-amber-500 text-xl"></i><div class="text-[10px] text-slate-500 mt-1">拉黑</div></div>
         </div>
 
         <div class="mb-10">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">管理员备注</h3>
-                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline">编辑备注</button>
+                <h3 class="text-xs font-bold text-slate-400 tracking-widest uppercase">管理员备注</h3>
+                <button onclick="toggleEdit()" class="text-[10px] text-blue-500 underline">编辑描述</button>
             </div>
             <div class="p-6 bg-blue-500/5 border border-blue-500/20 rounded-3xl text-sm text-blue-200 italic leading-relaxed">
-                {{ post.admin_note if post.admin_note else '暂无管理员评价内容。' }}
+                {{ post.admin_note if post.admin_note else '暂无描述' }}
             </div>
-        </div>
-
-        <div class="space-y-4 pt-8 border-t border-white/5">
-            <h4 class="text-xs font-bold text-slate-500 uppercase">网友评价</h4>
-            {% for c in comments %}
-            <div class="bg-white/5 p-4 rounded-2xl">
-                <p class="text-sm text-slate-300">{{ c.content }}</p>
-                <div class="text-[9px] text-slate-600 mt-2">{{ c.date }}</div>
-            </div>
-            {% endfor %}
         </div>
     </div>
 
-    <div id="edit-box" class="hidden fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6 backdrop-blur-sm">
+    <div id="edit-box" class="hidden fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-6 backdrop-blur-sm">
         <div class="bg-[#0a0d14] w-full max-w-sm p-6 rounded-3xl border border-white/10">
-            <h4 class="mb-4 font-bold">修改单条描述</h4>
-            <input type="password" id="pwd" placeholder="管理密码" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-3">
-            <textarea id="note" rows="5" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-4">{{ post.admin_note }}</textarea>
+            <h4 class="mb-4 font-bold text-blue-500 text-center">修改备注</h4>
+            <input type="password" id="pwd" placeholder="密码" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-3 outline-none">
+            <textarea id="note" rows="5" class="w-full bg-black border border-white/10 rounded-xl p-3 text-sm mb-4 outline-none">{{ post.admin_note }}</textarea>
             <div class="flex gap-2">
-                <button onclick="saveNote({{ post.id }})" class="flex-1 bg-blue-600 py-3 rounded-xl font-bold">提交</button>
+                <button onclick="saveNote({{ post.id }})" class="flex-1 bg-blue-600 py-3 rounded-xl font-bold">保存</button>
                 <button onclick="toggleEdit()" class="flex-1 bg-slate-800 py-3 rounded-xl">取消</button>
             </div>
         </div>
