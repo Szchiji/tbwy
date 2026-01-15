@@ -5,40 +5,62 @@
     <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #050505; color: #f1f1f1; }
+        body { background: #050505; color: #f1f1f1; -webkit-tap-highlight-color: transparent; }
         .post-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
-        .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+        .video-tag::after { content: '▶'; position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; border-radius: 0.75rem; }
     </style>
 </head>
-<body class="pb-10">
-    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-white/5 p-4">
+<body class="pb-20">
+    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 p-4">
         <div class="max-w-xl mx-auto space-y-3">
-            <h1 class="text-xl font-bold text-blue-500 text-center">MATRIX HUB</h1>
-            {% if notice %}<div class="text-[10px] text-center text-blue-300 py-1 bg-blue-500/10 rounded">{{ notice }}</div>{% endif %}
-            <form action="/" class="relative">
-                <input type="text" name="q" value="{{q}}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500/50">
-            </form>
+            <h1 class="text-xl font-black text-blue-500 text-center tracking-tighter">MATRIX HUB</h1>
+            {% if notice %}<div class="text-[10px] text-center text-blue-300 py-1 bg-blue-500/10 rounded-lg border border-blue-500/20">{{ notice }}</div>{% endif %}
         </div>
     </nav>
+
     <main class="max-w-xl mx-auto px-4 mt-6 space-y-4">
         {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="post-card block rounded-2xl p-3 flex gap-4 active:scale-[0.98] transition">
-            <div class="w-24 h-24 rounded-xl overflow-hidden bg-gray-900 flex-shrink-0 relative">
+        <div id="p-{{ post.id }}" class="post-card rounded-3xl p-3 flex gap-4 transition-transform active:scale-95">
+            <a href="/post/{{ post.id }}" class="w-24 h-24 rounded-2xl overflow-hidden bg-gray-900 flex-shrink-0 relative">
                 {% if post.first_media %}
-                    {% if post.first_media.endswith('.mp4') %}<video src="{{ post.first_media }}#t=0.001" class="w-full h-full object-cover"></video>
-                    {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
+                    {% if post.first_media.endswith('.mp4') %}
+                        <video src="{{ post.first_media }}#t=0.1" playsinline muted preload="metadata" class="w-full h-full object-cover"></video>
+                        <div class="video-tag"></div>
+                    {% else %}
+                        <img src="{{ post.first_media }}" loading="lazy" class="w-full h-full object-cover">
+                    {% endif %}
                 {% endif %}
-                {% if post.media_group_id %}<div class="absolute inset-0 bg-black/30 flex items-center justify-center text-[10px] font-bold">组图</div>{% endif %}
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-[10px] text-blue-400 font-mono">{{ post.date }}</span>
-                    <span class="text-[10px] bg-white/5 px-2 py-0.5 rounded text-gray-500">{{ post.title }}</span>
+                {% if post.media_group_id %}<div class="absolute bottom-1 right-1 bg-black/70 text-[8px] px-1.5 py-0.5 rounded-md text-white/80">图集</div>{% endif %}
+            </a>
+
+            <div class="flex-1 min-w-0 flex flex-col justify-between py-1">
+                <a href="/post/{{ post.id }}">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-[10px] text-blue-500/70 font-mono">{{ post.date }}</span>
+                        <span class="text-[9px] bg-white/5 px-2 py-0.5 rounded-full text-gray-500 uppercase">{{ post.title }}</span>
+                    </div>
+                    <p class="text-[13px] text-gray-300 leading-snug line-clamp-3 whitespace-pre-wrap">{{ post.text }}</p>
+                </a>
+                <div class="flex justify-end">
+                    <button onclick="blockPost('{{post.id}}')" class="text-[10px] text-gray-700 active:text-red-500">屏蔽内容</button>
                 </div>
-                <p class="text-[13px] text-gray-400 leading-snug line-clamp-4 whitespace-pre-wrap">{{ post.text }}</p>
             </div>
-        </a>
+        </div>
         {% endfor %}
     </main>
+
+    <script>
+        function blockPost(id) {
+            if(!confirm('隐藏此条内容？')) return;
+            let b = JSON.parse(localStorage.getItem('matrix_blocked') || '[]');
+            if(!b.includes(id)) b.push(id);
+            localStorage.setItem('matrix_blocked', JSON.stringify(b));
+            document.getElementById('p-'+id).style.display = 'none';
+        }
+        window.onload = () => {
+            let b = JSON.parse(localStorage.getItem('matrix_blocked') || '[]');
+            b.forEach(id => { if(document.getElementById('p-'+id)) document.getElementById('p-'+id).style.display = 'none'; });
+        }
+    </script>
 </body>
 </html>
