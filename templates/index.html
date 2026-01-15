@@ -2,118 +2,57 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Matrix Hub - 情报中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background: #020408; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        
-        /* 公告跑马灯动画 */
-        @keyframes scroll { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
-        .animate-notice { display: inline-block; white-space: nowrap; animation: scroll 15s linear infinite; }
-        
-        /* 文字预览：保留换行且限制行数 */
-        .text-preview {
-            display: -webkit-box;
-            -webkit-line-clamp: 5;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            white-space: pre-wrap;
-            word-break: break-all;
-            line-height: 1.5;
-            font-size: 13px;
-        }
-
-        /* 隐藏滚动条但保留功能 */
-        ::-webkit-scrollbar { width: 0; background: transparent; }
-        
-        /* 点击态反馈 */
-        .active-scale:active { transform: scale(0.98); transition: transform 0.1s; }
+        body { background-color: #050505; color: #e5e5e5; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+        .post-card:hover { transform: translateY(-4px); transition: all 0.3s; }
     </style>
 </head>
-<body class="pb-10">
-
-    <nav class="sticky top-0 z-50 bg-[#020408]/95 backdrop-blur-md border-b border-white/5 p-4">
-        <div class="max-w-xl mx-auto space-y-3">
-            <h1 class="text-xl font-black italic text-blue-500 text-center tracking-tighter">MATRIX HUB</h1>
-            
-            <div class="bg-blue-600/10 border border-blue-600/20 rounded-lg h-7 flex items-center overflow-hidden">
-                <div class="animate-notice text-[11px] text-blue-300 font-bold w-full">
-                    {{ notice }}
-                </div>
-            </div>
-
+<body class="min-h-screen pb-10">
+    <nav class="sticky top-0 z-50 glass mb-6">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <a href="/" class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Matrix Hub</a>
             <form action="/" method="GET" class="relative">
-                <input type="text" name="q" value="{{ q }}" placeholder="输入关键词搜索..." 
-                       class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500 text-white placeholder-slate-500">
-                <button type="submit" class="absolute right-3 top-2.5 text-slate-500">
-                    <i class="bi bi-search"></i>
-                </button>
+                <input type="text" name="q" value="{{q}}" placeholder="搜索内容..." class="bg-white/5 border border-white/10 rounded-full px-4 py-1 focus:outline-none focus:border-blue-500 text-sm">
             </form>
         </div>
     </nav>
 
-    <main class="max-w-xl mx-auto px-4 mt-6 space-y-3" id="post-container">
-        {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="post-item block active-scale" data-id="{{ post.id }}">
-            <div class="bg-[#0a0d14] rounded-2xl p-3 flex gap-4 border border-white/5 items-start">
-                
-                <div class="w-24 h-24 rounded-xl overflow-hidden bg-slate-900 flex-shrink-0 border border-white/5 relative">
-                    {% if post.first_media %}
-                        {% if post.first_media.lower().endswith('.mp4') or post.first_media.lower().endswith('.mov') %}
-                            <video src="{{ post.first_media }}#t=0.001" class="w-full h-full object-cover" muted playsinline></video>
-                            <div class="absolute inset-0 flex items-center justify-center bg-black/20">
-                                <i class="bi bi-play-circle-fill text-white/70 text-xl"></i>
-                            </div>
-                        {% else %}
-                            <img src="{{ post.first_media }}" class="w-full h-full object-cover" loading="lazy">
-                        {% endif %}
-                    {% else %}
-                        <div class="w-full h-full flex items-center justify-center text-[10px] text-slate-700 italic font-mono">TEXT</div>
-                    {% endif %}
-                </div>
-
-                <div class="flex-1 min-w-0">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="text-[10px] text-blue-500 font-mono font-bold uppercase">{{ post.date }}</span>
-                        {% if post.likes > 0 %}
-                        <span class="text-[10px] text-rose-500/80"><i class="bi bi-heart-fill"></i> {{ post.likes }}</span>
-                        {% endif %}
-                    </div>
-                    <p class="text-slate-300 text-preview">{{ post.text or "媒体消息" }}</p>
-                </div>
-
-            </div>
-        </a>
-        {% else %}
-        <div class="py-20 text-center text-slate-600">
-            <i class="bi bi-inbox text-4xl mb-2 block"></i>
-            <p class="text-sm">未找到相关情报</p>
+    <main class="max-w-5xl mx-auto px-4">
+        {% if notice %}
+        <div class="glass rounded-2xl p-4 mb-8 text-sm text-gray-400 border-l-4 border-blue-500">
+            📢 {{ notice }}
         </div>
-        {% endfor %}
+        {% endif %}
+
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {% for post in posts %}
+            <a href="/post/{{ post.id }}" class="post-card block glass rounded-2xl overflow-hidden shadow-lg">
+                <div class="aspect-[3/4] bg-gray-900 relative">
+                    {% if post.first_media %}
+                        {% if post.first_media.endswith('.mp4') %}
+                        <video src="{{ post.first_media }}#t=0.1" class="w-full h-full object-cover"></video>
+                        <div class="absolute top-2 right-2 bg-black/50 p-1 rounded">📹</div>
+                        {% else %}
+                        <img src="{{ post.first_media }}" class="w-full h-full object-cover" loading="lazy">
+                        {% endif %}
+                    {% endif %}
+                    {% if post.media_group_id %}<div class="absolute top-2 left-2 bg-blue-600/80 text-[10px] px-2 py-0.5 rounded-full">组图</div>{% endif %}
+                </div>
+                <div class="p-3">
+                    <p class="text-xs text-gray-500 mb-1">{{ post.title }}</p>
+                    <p class="text-sm line-clamp-2 leading-relaxed h-10">{{ post.text }}</p>
+                    <div class="mt-3 flex items-center justify-between text-[10px] text-gray-600">
+                        <span>{{ post.date }}</span>
+                        <span>❤️ {{ post.likes }}</span>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
     </main>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 1. 实现黑名单过滤逻辑
-            const blacklist = JSON.parse(localStorage.getItem('blacklist') || '[]');
-            if (blacklist.length > 0) {
-                document.querySelectorAll('.post-item').forEach(item => {
-                    const pid = parseInt(item.getAttribute('data-id'));
-                    if (blacklist.includes(pid)) {
-                        item.remove(); // 直接从 DOM 中移除拉黑的帖子
-                    }
-                });
-            }
-
-            // 2. 如果列表全被拉黑了，显示提示
-            const container = document.getElementById('post-container');
-            if (container && container.children.length === 0) {
-                container.innerHTML = '<div class="py-20 text-center text-slate-600"><p class="text-sm italic">当前内容已全部过滤</p></div>';
-            }
-        });
-    </script>
-
 </body>
 </html>
