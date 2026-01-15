@@ -3,102 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Hub v3</title>
+    <title>Matrix Hub 终极版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
-        body { background: #020408; color: #f1f5f9; }
-        .post-card { background: #0a0d14; border: 1px solid rgba(255,255,255,0.05); border-radius: 28px; transition: 0.3s; position: relative; }
-        .is-pinned { border: 1px solid #3b82f6; background: linear-gradient(145deg, #0a0d14 0%, #0d121d 100%); }
-        .tg-container { margin-top: -55px; }
-        .glass { background: rgba(2,4,8,0.8); backdrop-filter: blur(15px); }
-        .btn-blue { background: #2563eb; transition: 0.2s; }
-        .btn-blue:active { transform: scale(0.95); }
+        body { background: #020408; color: #f1f5f9; font-family: system-ui; }
+        .post-card { background: #0a0d14; border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; overflow: hidden; }
+        .tg-embed { margin-top: -55px; } /* 隐藏 Widget 头部 */
+        .glass-nav { background: rgba(2,4,8,0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .btn-action { transition: all 0.2s; }
+        .btn-action:active { transform: scale(0.95); }
     </style>
 </head>
-<body class="pb-24">
-    <header class="glass sticky top-0 z-50 px-6 py-4 border-b border-white/5 flex justify-between items-center">
-        <h1 class="text-blue-500 font-black tracking-tighter text-xl italic">MATRIX HUB</h1>
-        <div class="text-[10px] text-slate-500 bg-white/5 px-2 py-1 rounded">社区加密节点</div>
-    </header>
+<body class="pb-20">
+    <nav class="glass-nav sticky top-0 z-50 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+            <h1 class="text-lg font-black italic tracking-tighter">MATRIX HUB</h1>
+        </div>
+        <div class="text-[10px] bg-white/5 px-2 py-1 rounded text-slate-500">Node: Active</div>
+    </nav>
 
-    <main class="max-w-xl mx-auto px-4 mt-6 space-y-6">
+    <main class="max-w-xl mx-auto px-4 mt-6 space-y-8">
         {% for post in posts %}
-        <div class="post-card p-0 overflow-hidden {% if post.is_pinned %} is-pinned {% endif %}">
-            {% if post.likes > 10 %}<div class="absolute top-4 right-4 z-10 bg-orange-500 text-white text-[9px] px-2 py-0.5 rounded-full animate-pulse shadow-lg shadow-orange-500/50">🔥 HOT</div>{% endif %}
-            
-            <div class="overflow-hidden rounded-t-[28px] bg-black"><div class="tg-container">
-                <script async src="https://telegram.org/js/telegram-widget.js?22" data-telegram-post="{{ post.username }}/{{ post.msg_id }}" data-width="100%" data-dark="1"></script>
-            </div></div>
+        <div class="post-card relative">
+            {% if post.likes > 5 %}
+            <div class="absolute top-4 right-4 z-10 bg-rose-600 text-[9px] px-2 py-0.5 rounded-full font-bold shadow-lg shadow-rose-900/20">🔥 HOT</div>
+            {% endif %}
 
-            <div class="p-5">
-                <div class="space-y-3 mb-4" id="c-box-{{ post.id }}">
+            <div class="bg-black min-h-[150px]">
+                <div class="tg-embed">
+                    <script async src="https://telegram.org/js/telegram-widget.js?22" 
+                        data-telegram-post="{{ post.username }}/{{ post.msg_id }}" 
+                        data-width="100%" data-dark="1"></script>
+                </div>
+            </div>
+
+            <div class="p-5 border-t border-white/5">
+                <div class="flex justify-between items-center mb-4">
+                    <button onclick="like({{ post.id }})" class="flex items-center gap-1 text-slate-400 hover:text-rose-500 transition">
+                        <i class="bi bi-heart-fill text-sm"></i>
+                        <span class="text-xs font-mono">{{ post.likes }}</span>
+                    </button>
+                    <span class="text-[10px] text-slate-600 font-mono">{{ post.date }}</span>
+                </div>
+
+                <div class="space-y-3 mb-4" id="cbox-{{ post.id }}">
                     {% for c in comments %}{% if c.post_id == post.id and c.parent_id == 0 %}
                     <div class="bg-white/5 p-3 rounded-2xl border border-white/5">
                         <p class="text-xs text-slate-300 leading-relaxed comm-text">{{ c.content }}</p>
-                        <div class="flex justify-between items-center mt-2">
-                            <span class="text-[9px] text-slate-600">{{ c.date }}</span>
-                            <button onclick="setReply({{ post.id }}, {{ c.id }}, '{{ c.content[:10] }}')" class="text-blue-500 text-[10px]">回复</button>
+                        {% for sub in comments %}{% if sub.parent_id == c.id %}
+                        <div class="mt-2 ml-4 pl-3 border-l border-blue-500/30 text-[11px] text-slate-400 italic">
+                            {{ sub.content }}
                         </div>
-                        {% for sub in comments %}{% if sub.parent_id == c.id %}<div class="ml-4 border-l-2 border-blue-500/20 pl-3 mt-2 text-[11px] text-slate-400">{{ sub.content }}</div>{% endif %}{% endfor %}
+                        {% endif %}{% endfor %}
                     </div>
                     {% endif %}{% endfor %}
                 </div>
 
-                <div class="bg-white/5 p-2 rounded-2xl border border-white/10">
-                    <div id="rb-{{ post.id }}" class="hidden text-[10px] bg-blue-500/20 p-1 mb-1 rounded px-2 flex justify-between"><span>回复中...</span><button onclick="cancelReply({{ post.id }})">×</button></div>
-                    <div class="flex gap-2">
-                        <input type="text" id="i-{{ post.id }}" placeholder="发表观点..." class="flex-1 bg-transparent px-2 py-1 text-xs outline-none">
-                        <button onclick="sendC({{ post.id }})" class="btn-blue px-4 py-2 rounded-xl text-xs font-bold text-white">发送</button>
-                    </div>
+                <div class="bg-white/5 p-2 rounded-2xl flex gap-2 border border-white/5">
+                    <input type="text" id="input-{{ post.id }}" placeholder="发表观点..." 
+                           class="flex-1 bg-transparent px-3 py-1 text-xs outline-none">
+                    <button onclick="sendComm({{ post.id }})" class="btn-action bg-blue-600 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold">发送</button>
                 </div>
             </div>
         </div>
         {% endfor %}
     </main>
 
-    <button onclick="toggleM()" class="fixed bottom-8 right-8 w-14 h-14 bg-blue-600 rounded-full shadow-2xl flex items-center justify-center text-white text-2xl z-50 hover:rotate-90 transition-transform"><i class="bi bi-plus-lg"></i></button>
-    
-    <div id="modal" class="hidden fixed inset-0 z-[100] glass flex items-center justify-center p-6">
-        <div class="bg-[#0a0d14] border border-white/10 w-full max-w-sm rounded-[32px] p-6">
-            <h2 class="text-lg font-bold mb-1">情报投稿</h2>
-            <p class="text-[10px] text-slate-500 mb-4">内容将发送至管理员审核，请确保真实性</p>
-            <textarea id="t-text" placeholder="输入内容..." class="w-full h-40 bg-white/5 border border-white/5 rounded-2xl p-4 text-sm outline-none focus:border-blue-500 transition-all"></textarea>
-            <div id="char-count" class="text-[9px] text-right text-slate-600 mt-1">0 / 500</div>
-            <div class="flex gap-3 mt-6">
-                <button onclick="subT()" class="flex-1 btn-blue py-3 rounded-2xl font-bold text-sm">提交审核</button>
-                <button onclick="toggleM()" class="flex-1 bg-white/5 py-3 rounded-2xl text-sm font-medium">取消</button>
-            </div>
-        </div>
-    </div>
+    <a href="https://t.me/{{ posts[0].username if posts else '' }}" target="_blank" 
+       class="fixed bottom-6 right-6 w-14 h-14 bg-blue-600 rounded-full shadow-2xl flex items-center justify-center text-white text-2xl z-50 hover:rotate-12 transition">
+        <i class="bi bi-send-fill"></i>
+    </a>
 
     <script>
-        let reps = {};
-        function toggleM() { document.getElementById('modal').classList.toggle('hidden'); }
-        function setReply(pid, cid, txt) { reps[pid] = cid; document.getElementById(`rb-${pid}`).classList.remove('hidden'); }
-        function cancelReply(pid) { delete reps[pid]; document.getElementById(`rb-${pid}`).classList.add('hidden'); }
-
-        async function sendC(pid) {
-            const val = document.getElementById(`i-${pid}`).value; if(!val) return;
-            const res = await fetch('/api/comment', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({post_id:pid, parent_id:reps[pid]||0, content:val})});
-            if(res.ok) location.reload(); else alert("包含禁词或频率过快");
+        async function sendComm(pid) {
+            const val = document.getElementById(`input-${pid}`).value;
+            if(!val) return;
+            const res = await fetch('/api/comment', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({post_id:pid, content:val})
+            });
+            if(res.ok) location.reload(); else alert("包含禁词或发送太快");
         }
 
-        async function subT() {
-            const val = document.getElementById('t-text').value; if(!val) return;
-            const res = await fetch('/api/contribute', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:val})});
-            if(res.ok) { alert("已送审"); toggleM(); } else alert("发送失败");
+        async function like(id) {
+            await fetch(`/api/like/${id}`, {method:'POST'});
+            location.reload();
         }
 
-        // 自动链接转换逻辑
+        // 自动转换评论中的链接
         document.querySelectorAll('.comm-text').forEach(el => {
             const urlRegex = /(https?:\/\/[^\s]+)/g;
-            el.innerHTML = el.innerHTML.replace(urlRegex, url => `<a href="${url}" target="_blank" class="text-blue-400 underline">链接</a>`);
+            el.innerHTML = el.innerHTML.replace(urlRegex, url => `<a href="${url}" target="_blank" class="text-blue-400">🔗链接</a>`);
         });
-
-        document.getElementById('t-text').oninput = function() {
-            document.getElementById('char-count').innerText = `${this.value.length} / 500`;
-        };
     </script>
 </body>
 </html>
