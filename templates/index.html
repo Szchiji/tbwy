@@ -1,58 +1,43 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #050505; color: #e5e5e5; }
-        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
-        .post-card:hover { transform: translateY(-4px); transition: all 0.3s; }
+        body { background: #050505; color: #f1f1f1; }
+        .post-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
+        .line-clamp-4 { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
     </style>
 </head>
-<body class="min-h-screen pb-10">
-    <nav class="sticky top-0 z-50 glass mb-6">
-        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-            <a href="/" class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Matrix Hub</a>
-            <form action="/" method="GET" class="relative">
-                <input type="text" name="q" value="{{q}}" placeholder="搜索内容..." class="bg-white/5 border border-white/10 rounded-full px-4 py-1 focus:outline-none focus:border-blue-500 text-sm">
+<body class="pb-10">
+    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-white/5 p-4">
+        <div class="max-w-xl mx-auto space-y-3">
+            <h1 class="text-xl font-bold text-blue-500 text-center">MATRIX HUB</h1>
+            <form action="/" class="relative">
+                <input type="text" name="q" value="{{q}}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500/50">
             </form>
         </div>
     </nav>
-
-    <main class="max-w-5xl mx-auto px-4">
-        {% if notice %}
-        <div class="glass rounded-2xl p-4 mb-8 text-sm text-gray-400 border-l-4 border-blue-500">
-            📢 {{ notice }}
-        </div>
-        {% endif %}
-
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {% for post in posts %}
-            <a href="/post/{{ post.id }}" class="post-card block glass rounded-2xl overflow-hidden shadow-lg">
-                <div class="aspect-[3/4] bg-gray-900 relative">
-                    {% if post.first_media %}
-                        {% if post.first_media.endswith('.mp4') %}
-                        <video src="{{ post.first_media }}#t=0.1" class="w-full h-full object-cover"></video>
-                        <div class="absolute top-2 right-2 bg-black/50 p-1 rounded">📹</div>
-                        {% else %}
-                        <img src="{{ post.first_media }}" class="w-full h-full object-cover" loading="lazy">
-                        {% endif %}
-                    {% endif %}
-                    {% if post.media_group_id %}<div class="absolute top-2 left-2 bg-blue-600/80 text-[10px] px-2 py-0.5 rounded-full">组图</div>{% endif %}
+    <main class="max-w-xl mx-auto px-4 mt-6 space-y-4">
+        {% for post in posts %}
+        <a href="/post/{{ post.id }}" class="post-card block rounded-2xl p-3 flex gap-4 active:scale-95 transition">
+            <div class="w-24 h-24 rounded-xl overflow-hidden bg-gray-900 flex-shrink-0 relative">
+                {% if post.first_media %}
+                    {% if post.first_media.endswith('.mp4') %}<video src="{{ post.first_media }}#t=0.001" class="w-full h-full object-cover"></video>
+                    {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
+                {% endif %}
+                {% if post.media_group_id %}<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] font-bold text-white/70">组图</div>{% endif %}
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-[10px] text-blue-400 font-mono">{{ post.date }}</span>
+                    <span class="text-[10px] bg-white/5 px-2 py-0.5 rounded text-gray-500 font-bold">{{ post.title }}</span>
                 </div>
-                <div class="p-3">
-                    <p class="text-xs text-gray-500 mb-1">{{ post.title }}</p>
-                    <p class="text-sm line-clamp-2 leading-relaxed h-10">{{ post.text }}</p>
-                    <div class="mt-3 flex items-center justify-between text-[10px] text-gray-600">
-                        <span>{{ post.date }}</span>
-                        <span>❤️ {{ post.likes }}</span>
-                    </div>
-                </div>
-            </a>
-            {% endfor %}
-        </div>
+                <p class="text-[13px] text-gray-400 leading-snug line-clamp-4 whitespace-pre-wrap">{{ post.text }}</p>
+            </div>
+        </a>
+        {% endfor %}
     </main>
 </body>
 </html>
