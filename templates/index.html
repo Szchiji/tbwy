@@ -14,6 +14,7 @@
     <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-lg border-b border-white/5 p-4">
         <div class="max-w-xl mx-auto space-y-3">
             <h1 class="text-xl font-bold text-blue-500 text-center">MATRIX HUB</h1>
+            {% if notice %}<div class="text-[10px] text-center text-blue-300 py-1 bg-blue-500/10 rounded">{{ notice }}</div>{% endif %}
             <form action="/" class="relative">
                 <input type="text" name="q" value="{{q}}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500/50">
             </form>
@@ -21,18 +22,18 @@
     </nav>
     <main class="max-w-xl mx-auto px-4 mt-6 space-y-4">
         {% for post in posts %}
-        <a href="/post/{{ post.id }}" class="post-card block rounded-2xl p-3 flex gap-4 active:scale-95 transition">
+        <a href="/post/{{ post.id }}" class="post-card block rounded-2xl p-3 flex gap-4 active:scale-[0.98] transition">
             <div class="w-24 h-24 rounded-xl overflow-hidden bg-gray-900 flex-shrink-0 relative">
                 {% if post.first_media %}
                     {% if post.first_media.endswith('.mp4') %}<video src="{{ post.first_media }}#t=0.001" class="w-full h-full object-cover"></video>
                     {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
                 {% endif %}
-                {% if post.media_group_id %}<div class="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] font-bold text-white/70">组图</div>{% endif %}
+                {% if post.media_group_id %}<div class="absolute inset-0 bg-black/30 flex items-center justify-center text-[10px] font-bold">组图</div>{% endif %}
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-center mb-1">
                     <span class="text-[10px] text-blue-400 font-mono">{{ post.date }}</span>
-                    <span class="text-[10px] bg-white/5 px-2 py-0.5 rounded text-gray-500 font-bold">{{ post.title }}</span>
+                    <span class="text-[10px] bg-white/5 px-2 py-0.5 rounded text-gray-500">{{ post.title }}</span>
                 </div>
                 <p class="text-[13px] text-gray-400 leading-snug line-clamp-4 whitespace-pre-wrap">{{ post.text }}</p>
             </div>
