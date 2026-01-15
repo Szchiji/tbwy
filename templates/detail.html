@@ -17,30 +17,22 @@
             {% endfor %}
         </div>
         <div class="bg-white/5 p-6 rounded-3xl mb-8 text-[15px] leading-relaxed whitespace-pre-wrap">{{ post.text }}</div>
-        <button onclick="like()" class="w-full bg-white/5 py-4 rounded-2xl text-center mb-10 border border-white/10">
+        <button onclick="like()" class="w-full bg-blue-600/10 py-4 rounded-2xl text-center mb-10 border border-blue-500/20 active:bg-blue-600/30">
             <span id="lk-txt">❤️ {{ post.likes }} 喜欢</span>
         </button>
-        <div class="space-y-6">
+        <div class="space-y-4">
             <div class="flex gap-2">
-                <input id="cm-in" type="text" placeholder="评论..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none">
+                <input id="cm-in" type="text" placeholder="写点什么..." class="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm outline-none">
                 <button onclick="sendCm()" class="bg-blue-600 px-6 py-2 rounded-xl text-sm font-bold">发布</button>
             </div>
             {% for c in comments %}
-            <div class="bg-white/5 p-4 rounded-xl border border-white/5">
-                <p class="text-sm text-gray-300">{{ c.content }}</p>
-                <p class="text-[10px] text-gray-600 mt-2">{{ c.date }}</p>
-            </div>
+            <div class="bg-white/5 p-4 rounded-xl border border-white/5"><p class="text-sm text-gray-300">{{ c.content }}</p><p class="text-[10px] text-gray-600 mt-2">{{ c.date }}</p></div>
             {% endfor %}
         </div>
     </div>
     <script>
-        function like(){ fetch('/api/like/{{post.id}}',{method:'POST'}).then(()=>{
-            let s = document.getElementById('lk-txt'); s.innerText = '❤️ ' + (parseInt(s.innerText.split(' ')[1])+1) + ' 喜欢';
-        });}
-        function sendCm(){
-            let v = document.getElementById('cm-in').value; if(!v) return;
-            fetch('/api/comment/{{post.id}}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})}).then(()=>location.reload());
-        }
+        function like(){ fetch('/api/like/{{post.id}}',{method:'POST'}).then(()=>{ let s = document.getElementById('lk-txt'); s.innerText = '❤️ ' + (parseInt(s.innerText.split(' ')[1])+1) + ' 喜欢'; });}
+        function sendCm(){ let v = document.getElementById('cm-in').value; if(!v) return; fetch('/api/comment/{{post.id}}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:v})}).then(()=>location.reload()); }
     </script>
 </body>
 </html>
