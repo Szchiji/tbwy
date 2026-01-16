@@ -161,7 +161,7 @@ def webhook():
                 # 5. 投稿审核提醒
                 if not update.channel_post and str(uid) != str(MY_CHAT_ID):
                     markup = InlineKeyboardMarkup().row(
-                        InlineKeyboardButton("✅通过", callback_query_data=f"y_{'G'+gid if gid else new_id}"),
+                        InlineKeyboardButton("✅通过", callback_data=f"y_{'G'+gid if gid else new_id}"),
                         InlineKeyboardButton("❌拒绝", callback_data=f"n_{'G'+gid if gid else new_id}")
                     )
                     bot.send_message(MY_CHAT_ID, f"🔔 新投稿:\n{txt[:100]}", reply_markup=markup)
