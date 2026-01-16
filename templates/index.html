@@ -112,8 +112,8 @@
             <div class="card-bg rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition cursor-pointer flex border border-white/5" 
                  data-post-id="{{ post.id }}">
                 
-                <!-- 左侧媒体区域 -->
-                <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
+                <!-- 左侧媒体区域 - 更小的尺寸 -->
+                <div class="relative w-28 h-28 flex-shrink-0 bg-gray-900">
                     {% set media = post.first_media or '' %}
                     {% set is_video = media.endswith('.mp4') or media.endswith('.mov') or media.endswith('.MP4') or media.endswith('.MOV') %}
                     {% set is_image = media.endswith('.jpg') or media.endswith('.jpeg') or media.endswith('.png') or media.endswith('.gif') or media.endswith('.webp') or media.endswith('.JPG') or media.endswith('.JPEG') or media.endswith('.PNG') %}
@@ -145,13 +145,13 @@
                     {% endif %}
                 </div>
 
-                <!-- 右侧文字区域 -->
-                <div class="flex-1 p-4 flex flex-col justify-start min-w-0">
-                    <div class="text-blue-400 text-xs font-bold mb-2 text-left">{{ post.date }}</div>
-                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left w-full">
+                <!-- 右侧文字区域 - 完全左对齐 -->
+                <div class="flex-1 p-3 flex flex-col items-start justify-start min-w-0">
+                    <div class="text-blue-400 text-xs font-bold mb-1 text-left w-full">{{ post.date }}</div>
+                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap break-words text-left w-full">
                         {{ post.text if post.text else '查看详情' }}
                     </div>
-                    <div class="flex items-center gap-3 mt-auto pt-2 text-xs text-gray-500">
+                    <div class="flex items-center gap-3 mt-auto pt-2 text-xs">
                         <span class="text-pink-400">❤️ {{ post.likes or 0 }}</span>
                         <span class="text-red-400">🚫 {{ post.blacklist_count or 0 }}</span>
                     </div>
