@@ -8,6 +8,48 @@
         body { background: #050505; color: #f1f1f1; }
         .glass-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
         .admin-desc { background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(147,51,234,0.1) 100%); border: 1px solid rgba(59,130,246,0.3); }
+        .back-to-top { 
+            position: fixed; 
+            bottom: 80px; 
+            right: 20px; 
+            background: rgba(59,130,246,0.8); 
+            width: 50px; 
+            height: 50px; 
+            border-radius: 50%; 
+            display: none; 
+            align-items: center; 
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        .back-to-top:hover { background: rgba(59,130,246,1); transform: scale(1.1); }
+        .back-to-top.show { display: flex; }
+        /* Lightbox styles */
+        .lightbox { 
+            display: none; 
+            position: fixed; 
+            z-index: 9999; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.95); 
+            align-items: center; 
+            justify-content: center;
+        }
+        .lightbox.active { display: flex; }
+        .lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; }
+        .lightbox-close { 
+            position: absolute; 
+            top: 20px; 
+            right: 20px; 
+            color: white; 
+            font-size: 40px; 
+            font-weight: bold; 
+            cursor: pointer;
+            z-index: 10000;
+        }
         a { color: #60a5fa; text-decoration: underline; }
         a:hover { color: #93c5fd; }
     </style>
@@ -42,7 +84,7 @@
                         {% set thumb_url = m.replace('.mp4', '_thumb.jpg').replace('.MP4', '_thumb.jpg').replace('.mov', '_thumb.jpg').replace('.MOV', '_thumb.jpg') %}
                         <video src="{{ m }}" poster="{{ thumb_url }}" controls playsinline class="w-full block"></video>
                     {% else %}
-                        <img src="{{ m }}" class="w-full block shadow-inner">
+                        <img src="{{ m }}" class="w-full block shadow-inner cursor-pointer" onclick="openLightbox('{{ m }}')">
                     {% endif %}
                 </div>
                 {% endif %}
@@ -53,12 +95,23 @@
         <div class="glass-panel p-8 rounded-[2.5rem] mb-10 text-[16px] leading-relaxed text-gray-200 whitespace-pre-wrap shadow-xl linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
 
         <!-- 互动 -->
-        <div class="flex gap-3 mb-10">
-            <button id="likeBtn" onclick="handleLike()" class="flex-1 bg-blue-600/10 py-5 rounded-2xl text-center border border-blue-500/20 transition-all active:scale-95">
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <button id="likeBtn" onclick="handleLike()" class="bg-blue-600/10 py-5 rounded-2xl text-center border border-blue-500/20 transition-all active:scale-95">
                 <span id="likeTxt" class="text-blue-400 font-black tracking-widest">❤️ {{ post.likes }} LIKES</span>
             </button>
-            <button id="blacklistBtn" onclick="handleBlacklist()" class="flex-1 bg-red-600/10 py-5 rounded-2xl text-center border border-red-500/20 transition-all active:scale-95">
+            <button id="blacklistBtn" onclick="handleBlacklist()" class="bg-red-600/10 py-5 rounded-2xl text-center border border-red-500/20 transition-all active:scale-95">
                 <span id="blacklistTxt" class="text-red-400 font-black tracking-widest">🚫 {{ post.blacklist_count or 0 }} 拉黑</span>
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-2 gap-3 mb-10">
+            <button id="favoriteBtn" onclick="handleFavorite()" class="bg-yellow-600/10 py-5 rounded-2xl text-center border border-yellow-500/20 transition-all active:scale-95">
+                <span id="favoriteTxt" class="text-yellow-400 font-black tracking-widest">
+                    {% if is_favorited %}⭐ 已收藏{% else %}☆ 收藏{% endif %}
+                </span>
+            </button>
+            <button onclick="handleShare()" class="bg-green-600/10 py-5 rounded-2xl text-center border border-green-500/20 transition-all active:scale-95">
+                <span class="text-green-400 font-black tracking-widest">🔗 分享</span>
             </button>
         </div>
 
@@ -70,11 +123,11 @@
             </div>
             <div class="space-y-4" id="commentsList">
                 {% for c in comments %}
-                <div class="glass-panel p-5 rounded-2xl relative" data-comment-id="{{ c.id }}">
+                <div class="glass-panel p-5 rounded-2xl relative" data-comment-id="{{ c.id }}" data-comment-user="{{ c.user_id or 'anonymous' }}">
                     <p class="text-[14px] text-gray-300 leading-relaxed linkify">{{ c.content }}</p>
                     <div class="flex justify-between items-center mt-3">
                         <div class="text-[10px] text-gray-600 font-mono">{{ c.date }}</div>
-                        <button onclick="deleteComment({{ c.id }})" class="text-red-400 text-xs hover:text-red-300 transition">🗑️ 删除</button>
+                        <button onclick="deleteComment({{ c.id }}, '{{ c.user_id or 'anonymous' }}')" class="text-red-400 text-xs hover:text-red-300 transition">🗑️ 删除</button>
                     </div>
                 </div>
                 {% endfor %}
@@ -82,8 +135,22 @@
         </div>
     </div>
 
+    <!-- Lightbox for image zoom -->
+    <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+        <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+        <img id="lightbox-img" src="" alt="">
+    </div>
+
+    <!-- Back to top button -->
+    <div id="backToTop" class="back-to-top" onclick="scrollToTop()">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+        </svg>
+    </div>
+
     <script>
         const pid = "{{ post.id }}";
+        let isFavorited = {{ 'true' if is_favorited else 'false' }};
         
         // 生成或获取用户ID
         function getUserId() {
@@ -153,20 +220,95 @@
             }).then(() => location.reload());
         }
         
-        function deleteComment(commentId) {
+        function deleteComment(commentId, commentUserId) {
+            const currentUserId = getUserId();
+            if (commentUserId !== currentUserId) {
+                alert('您只能删除自己的评论');
+                return;
+            }
+            
             if(!confirm('确定要删除这条评论吗？')) return;
             fetch('/api/comment/'+commentId, {
                 method:'DELETE',
                 headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({user_id: getUserId()})
+                body:JSON.stringify({user_id: currentUserId})
             }).then(res => {
                 if(res.ok) {
                     document.querySelector('[data-comment-id="'+commentId+'"]').remove();
                 } else {
-                    alert('删除失败');
+                    alert('删除失败：无权限或评论不存在');
                 }
             });
         }
+        
+        function handleFavorite() {
+            const method = isFavorited ? 'DELETE' : 'POST';
+            fetch('/api/favorite/'+pid, {
+                method: method,
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({user_id: getUserId()})
+            }).then(res => res.json()).then(data => {
+                if(data.status === 'ok') {
+                    isFavorited = !isFavorited;
+                    const txt = document.getElementById('favoriteTxt');
+                    txt.innerText = isFavorited ? '⭐ 已收藏' : '☆ 收藏';
+                    document.getElementById('favoriteBtn').style.opacity = isFavorited ? '0.7' : '1';
+                }
+            });
+        }
+        
+        function handleShare() {
+            const url = window.location.href;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('链接已复制到剪贴板！');
+                }).catch(() => {
+                    // Fallback
+                    promptCopyLink(url);
+                });
+            } else {
+                promptCopyLink(url);
+            }
+        }
+        
+        function promptCopyLink(url) {
+            const textarea = document.createElement('textarea');
+            textarea.value = url;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                alert('链接已复制到剪贴板！');
+            } catch(e) {
+                prompt('请手动复制链接:', url);
+            }
+            document.body.removeChild(textarea);
+        }
+        
+        function openLightbox(imageSrc) {
+            document.getElementById('lightbox-img').src = imageSrc;
+            document.getElementById('lightbox').classList.add('active');
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+        }
+        
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Show/hide back to top button
+        window.addEventListener('scroll', function() {
+            const backToTop = document.getElementById('backToTop');
+            if (window.pageYOffset > 300) {
+                backToTop.classList.add('show');
+            } else {
+                backToTop.classList.remove('show');
+            }
+        });
         
         // 将文本中的 URL 转换为可点击链接（安全处理）
         function linkify(text) {
@@ -193,6 +335,9 @@
             
             let blacklisted = getBlacklistedItems();
             if(blacklisted.includes(pid)) document.getElementById('blacklistBtn').style.opacity = '0.5';
+            
+            // Update favorite button state
+            if(isFavorited) document.getElementById('favoriteBtn').style.opacity = '0.7';
             
             // 将正文和评论中的链接转换为可点击
             document.querySelectorAll('.linkify').forEach(el => {
