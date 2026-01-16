@@ -31,7 +31,7 @@ def get_db():
 def init_db():
     """ 
     初始化数据库并处理自动迁移。
-    如果缺少某些列，程序会自动尝试 ALTER TABLE 补齐。
+    如果缺少列，程序会自动尝试 ALTER TABLE 补齐。
     """
     conn = get_db()
     # 1. 创建基础表（如果不存在）
@@ -47,11 +47,10 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # 2. 动态检查并补齐缺失的列
+    # 2. 动态检查并补齐缺失的列 (防止 sqlite3.OperationalError: no such column)
     cursor = conn.execute("PRAGMA table_info(posts)")
     existing_columns = [column[1] for column in cursor.fetchall()]
     
-    # 需要检查的所有新列及其默认值定义
     required_columns = {
         'is_approved': "INTEGER DEFAULT 1",
         'media_group_id': "TEXT",
@@ -62,16 +61,16 @@ def init_db():
     
     for col, definition in required_columns.items():
         if col not in existing_columns:
-            print(f"Migrating database: Adding column {col}")
+            print(f"检测到缺失列，正在升级数据库: {col}")
             try:
                 conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {definition}")
             except Exception as e:
-                print(f"Migration error on {col}: {e}")
+                print(f"数据库升级失败 ({col}): {e}")
         
     conn.commit()
     conn.close()
 
-# 执行数据库初始化
+# 启动时执行初始化
 init_db()
 
 # --- 辅助工具 ---
@@ -115,21 +114,18 @@ def download_tg_file(file_id, custom_name=None):
 
 @bot.message_handler(commands=['sync'])
 def sync_history(message):
-    """ 管理员手动同步最近记录 """
     if str(message.chat.id) != str(MY_CHAT_ID): return
     
-    bot.reply_to(message, "🔄 正在从频道同步最近 50 条消息...")
+    bot.reply_to(message, "🔄 正在同步频道历史记录...")
     try:
         history = bot.get_chat_history(CHANNEL_ID, limit=50)
         conn = get_db()
-        
         for msg in history:
             exists = conn.execute("SELECT id FROM posts WHERE tg_msg_id = ?", (msg.message_id,)).fetchone()
             if exists: continue
             
             content = msg.caption or msg.text or ""
             file_id, file_type = None, None
-            
             if msg.photo:
                 file_id, file_type = msg.photo[-1].file_id, "image"
             elif msg.video:
@@ -140,7 +136,6 @@ def sync_history(message):
                 thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
                 conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?,?)",
                              (msg.message_id, content, fname, file_type, thumb, 1))
-        
         conn.commit()
         conn.close()
         bot.reply_to(message, "✅ 同步完成！")
@@ -149,7 +144,6 @@ def sync_history(message):
 
 @bot.message_handler(content_types=['photo', 'video'])
 def handle_submission(message):
-    """ 处理普通用户投稿与管理员直发 """
     is_admin = str(message.chat.id) == str(MY_CHAT_ID)
     file_id = message.photo[-1].file_id if message.photo else message.video.file_id
     file_type = "image" if message.photo else "video"
@@ -172,13 +166,10 @@ def handle_submission(message):
         markup.add(types.InlineKeyboardButton("✅ 通过", callback_data=f"approve_{post_id}"),
                    types.InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_{post_id}"))
         
-        try:
-            if file_type == "image":
-                bot.send_photo(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
-            else:
-                bot.send_video(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
-        except Exception as e:
-            print(f"Error sending admin notification: {e}")
+        if file_type == "image":
+            bot.send_photo(MY_CHAT_ID, file_id, caption=f"新投稿：\n{caption}", reply_markup=markup)
+        else:
+            bot.send_video(MY_CHAT_ID, file_id, caption=f"新投稿：\n{caption}", reply_markup=markup)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('approve_', 'reject_')))
 def admin_action(call):
@@ -190,7 +181,7 @@ def admin_action(call):
         bot.edit_message_caption(f"{call.message.caption}\n\n[状态: 已批准 ✅]", call.message.chat.id, call.message.message_id)
     else:
         conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-        bot.answer_callback_query(call.id, "已拒绝并删除")
+        bot.answer_callback_query(call.id, "已拒绝")
         bot.edit_message_caption(f"{call.message.caption}\n\n[状态: 已拒绝 ❌]", call.message.chat.id, call.message.message_id)
     conn.commit()
     conn.close()
@@ -201,14 +192,15 @@ def admin_action(call):
 def index():
     try:
         conn = get_db()
+        # 确保 created_at 存在后进行排序
         query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY created_at DESC"
         posts = conn.execute(query).fetchall()
         conn.close()
         return render_template('index.html', posts=posts)
-    except sqlite3.OperationalError as e:
-        # 如果还是报错，说明列没补全，强制重试初始化
+    except sqlite3.OperationalError:
+        # 万一迁移失败的后手逻辑
         init_db()
-        return "数据库结构正在升级，请刷新页面...", 503
+        return "数据库正在自动升级，请刷新页面...", 503
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
