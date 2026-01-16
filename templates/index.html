@@ -27,14 +27,14 @@
             {% for post in posts %}
             <div class="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition cursor-pointer" onclick="location.href='/post/{{ post.id }}'">
                 <div class="relative h-60 bg-gray-200">
-                    {% if post.first_media.endswith('.mp4') or post.first_media.endswith('.mov') %}
+                    {% if post.first_media and (post.first_media.endswith('.mp4') or post.first_media.endswith('.mov')) %}
                     <video class="w-full h-full object-cover">
                         <source src="{{ post.first_media }}" type="video/mp4">
                     </video>
                     <div class="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
                         <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
                     </div>
-                    {% else %}
+                    {% elif post.first_media %}
                     <img src="{{ post.first_media }}" class="w-full h-full object-cover">
                     {% endif %}
                 </div>

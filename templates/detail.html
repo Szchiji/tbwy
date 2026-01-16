@@ -21,6 +21,7 @@
         <!-- 媒体展示 -->
         <div class="space-y-4 mb-8">
             {% for m in all_media %}
+                {% if m %}
                 <div class="rounded-[2.5rem] overflow-hidden border border-white/5 bg-black shadow-2xl">
                     {% if m.lower().endswith('.mp4') %}
                         <video src="{{ m }}" controls playsinline class="w-full block"></video>
@@ -28,6 +29,7 @@
                         <img src="{{ m }}" class="w-full block shadow-inner">
                     {% endif %}
                 </div>
+                {% endif %}
             {% endfor %}
         </div>
 
