@@ -63,9 +63,9 @@
             document.querySelectorAll('.card-bg[data-post-id]').forEach(card => {
                 card.onclick = function() {
                     const postId = this.dataset.postId;
-                    let url = '/post/' + postId + '?user_id=' + getUserId();
+                    let url = '/post/' + encodeURIComponent(postId) + '?user_id=' + encodeURIComponent(getUserId());
                     if (adminKey) {
-                        url += '&admin_key=' + adminKey;
+                        url += '&admin_key=' + encodeURIComponent(adminKey);
                     }
                     location.href = url;
                 };
