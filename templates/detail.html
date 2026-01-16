@@ -36,10 +36,22 @@
         <!-- 正文 -->
         <div class="glass-panel p-8 rounded-[2.5rem] mb-10 text-[16px] leading-relaxed text-gray-200 whitespace-pre-wrap shadow-xl">{{ post.text or "暂无详细文案说明。" }}</div>
 
+        <!-- 管理员自定义描述 -->
+        {% if post.custom_description %}
+        <div class="glass-panel p-6 rounded-2xl mb-6 text-[14px] leading-relaxed text-blue-300 border border-blue-500/20">
+            📝 {{ post.custom_description }}
+        </div>
+        {% endif %}
+
         <!-- 互动 -->
-        <button id="likeBtn" onclick="handleLike()" class="w-full bg-blue-600/10 py-5 rounded-2xl text-center mb-10 border border-blue-500/20 transition-all active:scale-95">
-            <span id="likeTxt" class="text-blue-400 font-black tracking-widest">❤️ {{ post.likes }} LIKES</span>
-        </button>
+        <div class="flex gap-3 mb-10">
+            <button id="likeBtn" onclick="handleLike()" class="flex-1 bg-blue-600/10 py-5 rounded-2xl text-center border border-blue-500/20 transition-all active:scale-95">
+                <span id="likeTxt" class="text-blue-400 font-black tracking-widest">❤️ {{ post.likes }} LIKES</span>
+            </button>
+            <button id="blacklistBtn" onclick="handleBlacklist()" class="flex-1 bg-red-600/10 py-5 rounded-2xl text-center border border-red-500/20 transition-all active:scale-95">
+                <span id="blacklistTxt" class="text-red-400 font-black tracking-widest">🚫 {{ post.blacklist_count or 0 }} 拉黑</span>
+            </button>
+        </div>
 
         <!-- 评论 -->
         <div class="space-y-6">
@@ -60,6 +72,17 @@
 
     <script>
         const pid = "{{ post.id }}";
+        
+        // 生成或获取用户ID
+        function getUserId() {
+            let userId = localStorage.getItem('user_id');
+            if (!userId) {
+                userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('user_id', userId);
+            }
+            return userId;
+        }
+        
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
             if(liked.includes(pid)) return alert('您已经点过赞啦！');
@@ -71,6 +94,28 @@
                     const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
                     txt.innerText = '❤️ ' + num + ' LIKES';
                     document.getElementById('likeBtn').style.opacity = '0.5';
+                }
+            });
+        }
+
+        function handleBlacklist() {
+            let blacklisted = JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
+            if(blacklisted.includes(pid)) return alert('您已经拉黑过此内容！');
+            if(!confirm('确定要拉黑此内容吗？拉黑后将不再显示。')) return;
+            
+            fetch('/api/blacklist/'+pid, {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({user_id: getUserId()})
+            }).then(res => {
+                if(res.ok) {
+                    blacklisted.push(pid);
+                    localStorage.setItem('m_blacklisted', JSON.stringify(blacklisted));
+                    const txt = document.getElementById('blacklistTxt');
+                    const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
+                    txt.innerText = '🚫 ' + num + ' 拉黑';
+                    document.getElementById('blacklistBtn').style.opacity = '0.5';
+                    alert('已拉黑此内容，返回首页后将不再显示');
                 }
             });
         }
@@ -88,6 +133,9 @@
         window.onload = () => {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
             if(liked.includes(pid)) document.getElementById('likeBtn').style.opacity = '0.5';
+            
+            let blacklisted = JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
+            if(blacklisted.includes(pid)) document.getElementById('blacklistBtn').style.opacity = '0.5';
         };
     </script>
 </body>
