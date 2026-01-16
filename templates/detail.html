@@ -2,53 +2,54 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>详情</title>
+    <title>内容详情</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background: #050505; color: #f1f1f1; }
-        .comment-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
+        .glass-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
     </style>
 </head>
 <body class="pb-20">
     <div class="max-w-xl mx-auto px-4">
-        <!-- 头部导航 -->
-        <div class="flex items-center justify-between py-6">
-            <button onclick="history.back()" class="text-blue-500 text-sm font-bold">← 返回</button>
-            <div class="text-[10px] text-gray-500 font-mono">{{ post.date }}</div>
-        </div>
-        
-        <!-- 媒体展示区（支持多图） -->
+        <header class="flex items-center justify-between py-6">
+            <button onclick="history.back()" class="text-blue-500 text-sm font-bold flex items-center gap-1">
+                <span>←</span> 返回首页
+            </button>
+            <div class="text-[10px] text-gray-600 font-mono tracking-widest">{{ post.date }}</div>
+        </header>
+
+        <!-- 媒体展示 -->
         <div class="space-y-4 mb-8">
             {% for m in all_media %}
-                <div class="rounded-3xl overflow-hidden border border-white/5 bg-gray-950 shadow-2xl">
+                <div class="rounded-[2.5rem] overflow-hidden border border-white/5 bg-black shadow-2xl">
                     {% if m.first_media.lower().endswith('.mp4') %}
                         <video src="{{ m.first_media }}" controls playsinline class="w-full block"></video>
                     {% else %}
-                        <img src="{{ m.first_media }}" class="w-full block" loading="lazy">
+                        <img src="{{ m.first_media }}" class="w-full block shadow-inner">
                     {% endif %}
                 </div>
             {% endfor %}
         </div>
 
-        <!-- 正文内容 -->
-        <div class="bg-white/5 p-6 rounded-[2rem] mb-10 text-[15px] leading-relaxed text-gray-200 whitespace-pre-wrap border border-white/5">{{ post.text }}</div>
+        <!-- 正文 -->
+        <div class="glass-panel p-8 rounded-[2.5rem] mb-10 text-[16px] leading-relaxed text-gray-200 whitespace-pre-wrap shadow-xl">{{ post.text or "暂无详细文案说明。" }}</div>
 
-        <!-- 互动：点赞 -->
-        <button id="like-btn" onclick="handleLike()" class="w-full bg-blue-600/10 py-5 rounded-2xl text-center mb-10 border border-blue-500/20 active:scale-95 transition-transform">
-            <span id="lk-txt" class="text-blue-400 font-bold tracking-widest">❤️ {{ post.likes }} 喜欢</span>
+        <!-- 互动 -->
+        <button id="likeBtn" onclick="handleLike()" class="w-full bg-blue-600/10 py-5 rounded-2xl text-center mb-10 border border-blue-500/20 transition-all active:scale-95">
+            <span id="likeTxt" class="text-blue-400 font-black tracking-widest">❤️ {{ post.likes }} LIKES</span>
         </button>
 
-        <!-- 评论系统 -->
+        <!-- 评论 -->
         <div class="space-y-6">
             <div class="flex gap-2">
-                <input id="cm-in" type="text" placeholder="写下你的想法..." class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500">
-                <button onclick="sendCm()" class="bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded-2xl text-sm font-bold transition-colors">发布</button>
+                <input id="cmtInput" type="text" placeholder="说点什么吧..." class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500">
+                <button onclick="submitCmt()" class="bg-blue-600 px-6 py-3 rounded-2xl text-sm font-bold shadow-lg active:bg-blue-700">发布</button>
             </div>
             <div class="space-y-4">
                 {% for c in comments %}
-                <div class="comment-card p-4 rounded-2xl">
-                    <p class="text-[13px] text-gray-300 leading-relaxed">{{ c.content }}</p>
-                    <div class="text-[9px] text-gray-600 mt-3 font-mono">{{ c.date }}</div>
+                <div class="glass-panel p-5 rounded-2xl">
+                    <p class="text-[14px] text-gray-300 leading-relaxed">{{ c.content }}</p>
+                    <div class="text-[10px] text-gray-600 mt-3 font-mono">{{ c.date }}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -56,29 +57,25 @@
     </div>
 
     <script>
-        const pid = "{{post.id}}";
-
-        // 处理点赞（本地防刷）
+        const pid = "{{ post.id }}";
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if(liked.includes(pid)) return alert('您已经表达过喜欢了哦~');
-            
+            if(liked.includes(pid)) return alert('您已经点过赞啦！');
             fetch('/api/like/'+pid, {method:'POST'}).then(res => {
                 if(res.ok) {
                     liked.push(pid);
                     localStorage.setItem('m_liked', JSON.stringify(liked));
-                    const lkTxt = document.getElementById('lk-txt');
-                    const count = parseInt(lkTxt.innerText.split(' ')[1]) + 1;
-                    lkTxt.innerText = '❤️ ' + count + ' 喜欢';
-                    document.getElementById('like-btn').classList.add('bg-blue-600/20');
+                    const txt = document.getElementById('likeTxt');
+                    const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
+                    txt.innerText = '❤️ ' + num + ' LIKES';
+                    document.getElementById('likeBtn').style.opacity = '0.5';
                 }
             });
         }
 
-        // 发送评论
-        function sendCm() {
-            const val = document.getElementById('cm-in').value;
-            if(!val.trim()) return;
+        function submitCmt() {
+            const val = document.getElementById('cmtInput').value.trim();
+            if(!val) return;
             fetch('/api/comment/'+pid, {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
@@ -86,12 +83,9 @@
             }).then(() => location.reload());
         }
 
-        // 初始化点赞按钮状态
         window.onload = () => {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if(liked.includes(pid)) {
-                document.getElementById('like-btn').classList.add('bg-blue-600/20');
-            }
+            if(liked.includes(pid)) document.getElementById('likeBtn').style.opacity = '0.5';
         };
     </script>
 </body>
