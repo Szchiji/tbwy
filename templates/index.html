@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<! DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -7,29 +7,76 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background:  #0a0a12; }
-        .card-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
-        .nav-bg { background:  linear-gradient(90deg, #0f0f1a 0%, #1a1a2e 100%); }
+        . card-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        .nav-bg { background: linear-gradient(90deg, #0f0f1a 0%, #1a1a2e 100%); }
         .search-bg { background:  rgba(255,255,255,0.05); border:  1px solid rgba(255,255,255,0.1); }
         .notice-bg { background:  linear-gradient(90deg, #1e3a5f 0%, #2d4a7c 100%); }
-        /* 视频封面占位符样式 */
         .video-placeholder {
             background: linear-gradient(135deg, #1a2a3a 0%, #0d1a2a 100%);
             display: flex;
             align-items: center;
             justify-content:  center;
         }
-        .video-placeholder svg {
-            opacity: 0.6;
+        .video-thumb-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
     </style>
     <script>
         function getUserId() {
             let userId = localStorage.getItem('user_id');
-            if (!userId) {
+            if (! userId) {
                 userId = 'user_' + Math.random().toString(36).substring(2, 11);
                 localStorage. setItem('user_id', userId);
             }
             return userId;
+        }
+        
+        // 从视频生成缩略图
+        function generateVideoThumbnail(container, videoSrc) {
+            var video = document.createElement('video');
+            video.crossOrigin = 'anonymous';
+            video.muted = true;
+            video. playsInline = true;
+            video. preload = 'metadata';
+            
+            video.onloadeddata = function() {
+                video.currentTime = 0.5; // 跳到0.5秒位置
+            };
+            
+            video. onseeked = function() {
+                try {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth || 320;
+                    canvas.height = video. videoHeight || 180;
+                    var ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // 创建图片显示缩略图
+                    var img = document.createElement('img');
+                    img. src = canvas.toDataURL('image/jpeg', 0.8);
+                    img.className = 'video-thumb-canvas';
+                    img.alt = 'Video thumbnail';
+                    
+                    // 隐藏占位符，显示缩略图
+                    var placeholder = container.querySelector('.video-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                    container.insertBefore(img, container.firstChild);
+                } catch(e) {
+                    console.log('Cannot generate thumbnail:', e);
+                }
+            };
+            
+            video.onerror = function() {
+                console.log('Video load error');
+            };
+            
+            video.src = videoSrc;
+            video.load();
         }
         
         window.onload = function() {
@@ -42,18 +89,12 @@
                 }
             }
             
-            // 尝试加载视频封面
-            document.querySelectorAll('video. video-thumb').forEach(function(video) {
-                video.addEventListener('loadeddata', function() {
-                    // 视频加载成功，隐藏占位符
-                    var placeholder = video.parentElement.querySelector('.video-placeholder');
-                    if (placeholder) placeholder.style.display = 'none';
-                    video.style.display = 'block';
-                });
-                video.addEventListener('error', function() {
-                    // 视频加载失败，保持显示占位符
-                    video.style.display = 'none';
-                });
+            // 为所有视频生成缩略图
+            document.querySelectorAll('. video-container').forEach(function(container) {
+                var videoSrc = container.getAttribute('data-video-src');
+                if (videoSrc) {
+                    generateVideoThumbnail(container, videoSrc);
+                }
             });
         };
     </script>
@@ -79,7 +120,7 @@
             <div class="search-bg rounded-xl px-4 py-3 flex items-center">
                 <input type="text" name="q" value="{{ q }}" placeholder="搜索情报..." 
                        class="bg-transparent w-full text-gray-300 placeholder-gray-500 outline-none text-sm">
-                <button type="submit" class="text-gray-400 hover: text-white ml-2">
+                <button type="submit" class="text-gray-400 hover:text-white ml-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
@@ -98,27 +139,27 @@
                 <!-- 左侧媒体区域 -->
                 <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
                     {% if post.first_media and (post.first_media.endswith('. mp4') or post.first_media. endswith('.mov')) %}
-                    <!-- 视频：使用 poster 或显示播放图标占位 -->
-                    <div class="video-placeholder w-full h-full absolute inset-0">
-                        <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9. 555 7.168A1 1 0 008 8v4a1 1 0 001. 555.832l3-2a1 1 0 000-1.664l-3-2z"/>
-                        </svg>
-                    </div>
-                    <video class="video-thumb w-full h-full object-cover" style="display: none;" preload="metadata" muted playsinline>
-                        <source src="{{ post.first_media }}#t=0.5" type="video/mp4">
-                    </video>
-                    <!-- 播放图标覆盖层 -->
-                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div class="bg-black/40 rounded-full p-2">
-                            <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20">
+                    <!-- 视频容器 -->
+                    <div class="video-container w-full h-full" data-video-src="{{ post.first_media }}">
+                        <!-- 占位符（Canvas 生成缩略图前显示） -->
+                        <div class="video-placeholder w-full h-full absolute inset-0">
+                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                             </svg>
                         </div>
+                        <!-- 播放图标覆盖层 -->
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                            <div class="bg-black/40 rounded-full p-2">
+                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
+                                </svg>
+                            </div>
+                        </div>
                     </div>
-                    {% elif post.first_media %}
+                    {% elif post. first_media %}
                     <!-- 图片 -->
-                    <img src="{{ post. first_media }}" class="w-full h-full object-cover" 
-                         onerror="this. parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
+                    <img src="{{ post.first_media }}" class="w-full h-full object-cover" 
+                         onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
                     {% else %}
                     <!-- 无媒体 -->
                     <div class="w-full h-full flex items-center justify-center bg-gray-800">
@@ -129,17 +170,12 @@
 
                 <!-- 右侧文字区域 -->
                 <div class="flex-1 p-4 flex flex-col justify-between min-w-0">
-                    <!-- 日期 -->
-                    <div class="text-blue-400 text-xs font-bold mb-2">{{ post.date }}</div>
-                    
-                    <!-- 内容文字 -->
+                    <div class="text-blue-400 text-xs font-bold mb-2">{{ post. date }}</div>
                     <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap">
-                        {{ post.text if post.text else '查看详情' }}
+                        {{ post.text if post. text else '查看详情' }}
                     </div>
-                    
-                    <!-- 底部信息 -->
                     <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                        <span class="text-pink-400">❤️ {{ post.likes }}</span>
+                        <span class="text-pink-400">❤️ {{ post. likes }}</span>
                         {% if post.blacklist_count %}
                         <span>🚫 {{ post. blacklist_count }}</span>
                         {% endif %}
