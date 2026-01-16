@@ -256,6 +256,39 @@ def webhook():
 
         # 2. 管理员指令
         if str(uid) == str(MY_CHAT_ID) or str(p.chat.id) == str(MY_CHAT_ID):
+            # /admin - 获取最新帖子管理员链接
+            if txt == '/admin':
+                with get_db() as conn:
+                    posts = conn.execute("SELECT id, text, date FROM posts WHERE is_approved=1 ORDER BY id DESC LIMIT 10").fetchall()
+                
+                if posts:
+                    msg = "🔧 **管理员链接列表**\n\n"
+                    for p_row in posts:
+                        preview = (p_row['text'] or '无内容')[:25] + '...' if p_row['text'] and len(p_row['text']) > 25 else (p_row['text'] or '无内容')
+                        admin_url = f"{BASE_URL}/post/{p_row['id']}?admin_key={ADMIN_KEY}"
+                        msg += f"[{p_row['id']}] {preview}\n{admin_url}\n\n"
+                    bot.send_message(MY_CHAT_ID, msg, parse_mode='Markdown', disable_web_page_preview=True)
+                else:
+                    bot.send_message(MY_CHAT_ID, "暂无帖子")
+                return 'OK'
+            
+            # /admin <id> - 获取指定帖子管理员链接
+            if txt.startswith('/admin '):
+                try:
+                    post_id = int(txt[7:].strip())
+                    with get_db() as conn:
+                        post = conn.execute("SELECT id, text, date FROM posts WHERE id=?", (post_id,)).fetchone()
+                    
+                    if post:
+                        admin_url = f"{BASE_URL}/post/{post['id']}?admin_key={ADMIN_KEY}"
+                        msg = f"🔧 帖子 #{post['id']} 管理员链接\n\n🔗 {admin_url}"
+                        bot.send_message(MY_CHAT_ID, msg, disable_web_page_preview=True)
+                    else:
+                        bot.send_message(MY_CHAT_ID, f"❌ 帖子 #{post_id} 不存在")
+                except ValueError:
+                    bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /admin <帖子ID>")
+                return 'OK'
+            
             if txt.startswith('/notice '):
                 with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
                 bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
@@ -309,6 +342,11 @@ def webhook():
                         InlineKeyboardButton("❌拒绝", callback_data=f"n_{'G'+gid if gid else new_id}")
                     )
                     bot.send_message(MY_CHAT_ID, f"🔔 新投稿:\n{txt[:100]}", reply_markup=markup)
+                
+                # 6. 发送管理员链接
+                if update.channel_post and new_id:
+                    admin_url = f"{BASE_URL}/post/{new_id}?admin_key={ADMIN_KEY}"
+                    bot.send_message(MY_CHAT_ID, f"📢 新帖子已发布！\n\n🔗 管理链接：{admin_url}")
         
         return 'OK'
     return 'OK'
