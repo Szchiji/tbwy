@@ -7,15 +7,15 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background:  #0a0a12; }
-        . card-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
+        .card-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
         .nav-bg { background: linear-gradient(90deg, #0f0f1a 0%, #1a1a2e 100%); }
-        .search-bg { background:  rgba(255,255,255,0.05); border:  1px solid rgba(255,255,255,0.1); }
-        .notice-bg { background:  linear-gradient(90deg, #1e3a5f 0%, #2d4a7c 100%); }
+        .search-bg { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        .notice-bg { background: linear-gradient(90deg, #1e3a5f 0%, #2d4a7c 100%); }
         .video-placeholder {
             background: linear-gradient(135deg, #1a2a3a 0%, #0d1a2a 100%);
             display: flex;
             align-items: center;
-            justify-content:  center;
+            justify-content: center;
         }
         .video-thumb-canvas {
             position: absolute;
@@ -31,7 +31,7 @@
             white-space: nowrap;
         }
         .marquee-content {
-            display:  inline-block;
+            display: inline-block;
             padding-left: 100%;
             animation: marquee 15s linear infinite;
         }
@@ -43,9 +43,9 @@
     <script>
         function getUserId() {
             let userId = localStorage.getItem('user_id');
-            if (! userId) {
+            if (!userId) {
                 userId = 'user_' + Math.random().toString(36).substring(2, 11);
-                localStorage. setItem('user_id', userId);
+                localStorage.setItem('user_id', userId);
             }
             return userId;
         }
@@ -54,26 +54,26 @@
         function generateVideoThumbnail(container, videoSrc) {
             var video = document.createElement('video');
             video.crossOrigin = 'anonymous';
-            video. muted = true;
+            video.muted = true;
             video.playsInline = true;
-            video. preload = 'metadata';
+            video.preload = 'metadata';
             
             video.onloadeddata = function() {
                 video.currentTime = 0.5;
             };
             
-            video. onseeked = function() {
+            video.onseeked = function() {
                 try {
                     var canvas = document.createElement('canvas');
                     canvas.width = video.videoWidth || 320;
-                    canvas.height = video. videoHeight || 180;
+                    canvas.height = video.videoHeight || 180;
                     var ctx = canvas.getContext('2d');
-                    ctx. drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     var img = document.createElement('img');
-                    img. src = canvas.toDataURL('image/jpeg', 0.8);
+                    img.src = canvas.toDataURL('image/jpeg', 0.8);
                     img.className = 'video-thumb-canvas';
-                    img. alt = 'Video thumbnail';
+                    img.alt = 'Video thumbnail';
                     
                     var placeholder = container.querySelector('.video-placeholder');
                     if (placeholder) placeholder.style.display = 'none';
@@ -93,7 +93,7 @@
         
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
-            if (! urlParams.has('user_id')) {
+            if (!urlParams.has('user_id')) {
                 urlParams.set('user_id', getUserId());
                 const newUrl = window.location.pathname + '?' + urlParams.toString();
                 if (window.location.search !== '?' + urlParams.toString()) {
@@ -134,7 +134,7 @@
             <div class="search-bg rounded-xl px-4 py-3 flex items-center">
                 <input type="text" name="q" value="{{ q }}" placeholder="搜索情报..." 
                        class="bg-transparent w-full text-gray-300 placeholder-gray-500 outline-none text-sm">
-                <button type="submit" class="text-gray-400 hover: text-white ml-2">
+                <button type="submit" class="text-gray-400 hover:text-white ml-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
@@ -148,11 +148,11 @@
         <div class="space-y-4">
             {% for post in posts %}
             <div class="card-bg rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition cursor-pointer flex border border-white/5" 
-                 onclick="location.href='/post/{{ post. id }}'">
+                 onclick="location.href='/post/{{ post.id }}'">
                 
                 <!-- 左侧媒体区域 -->
                 <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
-                    {% if post.first_media and (post.first_media. endswith('. mp4') or post.first_media. endswith('.mov')) %}
+                    {% if post.first_media and (post.first_media.endswith('.mp4') or post.first_media.endswith('.mov')) %}
                     <!-- 视频容器 -->
                     <div class="video-container w-full h-full" data-video-src="{{ post.first_media }}">
                         <div class="video-placeholder w-full h-full absolute inset-0">
@@ -182,12 +182,12 @@
 
                 <!-- 右侧文字区域 -->
                 <div class="flex-1 p-4 flex flex-col justify-start min-w-0">
-                    <div class="text-blue-400 text-xs font-bold mb-2">{{ post. date }}</div>
+                    <div class="text-blue-400 text-xs font-bold mb-2">{{ post.date }}</div>
                     <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left">
-                        {{ post.text if post. text else '查看详情' }}
+                        {{ post.text if post.text else '查看详情' }}
                     </div>
                     <div class="flex items-center gap-3 mt-auto pt-2 text-xs text-gray-500">
-                        <span class="text-pink-400">❤️ {{ post. likes }}</span>
+                        <span class="text-pink-400">❤️ {{ post.likes }}</span>
                         {% if post.blacklist_count %}
                         <span>🚫 {{ post.blacklist_count }}</span>
                         {% endif %}
