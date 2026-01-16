@@ -100,24 +100,15 @@
                     {% set is_image = media.endswith('.jpg') or media.endswith('.jpeg') or media.endswith('.png') or media.endswith('.gif') or media.endswith('.webp') or media.endswith('.JPG') or media.endswith('.JPEG') or media.endswith('.PNG') %}
                     
                     {% if media and is_video %}
-                    <!-- 视频容器 - 使用服务器生成的缩略图 -->
+                    <!-- 视频容器 - 使用服务器生成的缩略图，不显示播放按钮 -->
                     <div class="video-container w-full h-full relative">
                         {% if post.thumbnail %}
                         <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="Video thumbnail">
                         {% else %}
                         <div class="video-placeholder w-full h-full">
-                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Play video icon" role="img">
-                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
-                            </svg>
+                            <span class="text-gray-500 text-xs">视频</span>
                         </div>
                         {% endif %}
-                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                            <div class="bg-black/40 rounded-full p-2">
-                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20" aria-label="Play button" role="img">
-                                    <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
-                                </svg>
-                            </div>
-                        </div>
                     </div>
                     {% elif media and is_image %}
                     <!-- 图片 -->
@@ -136,9 +127,9 @@
                 </div>
 
                 <!-- 右侧文字区域 -->
-                <div class="flex-1 p-4 flex flex-col items-start justify-start min-w-0">
-                    <div class="text-blue-400 text-xs font-bold mb-2">{{ post.date }}</div>
-                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left break-words">
+                <div class="flex-1 p-4 flex flex-col justify-start min-w-0">
+                    <div class="text-blue-400 text-xs font-bold mb-2 text-left">{{ post.date }}</div>
+                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left w-full">
                         {{ post.text if post.text else '查看详情' }}
                     </div>
                     <div class="flex items-center gap-3 mt-auto pt-2 text-xs text-gray-500">
