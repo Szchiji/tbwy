@@ -1,4 +1,4 @@
-<! DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -25,6 +25,20 @@
             height: 100%;
             object-fit: cover;
         }
+        /* 公告滚动动画 */
+        .marquee {
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .marquee-content {
+            display:  inline-block;
+            padding-left: 100%;
+            animation: marquee 15s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
     </style>
     <script>
         function getUserId() {
@@ -40,12 +54,12 @@
         function generateVideoThumbnail(container, videoSrc) {
             var video = document.createElement('video');
             video.crossOrigin = 'anonymous';
-            video.muted = true;
-            video. playsInline = true;
+            video. muted = true;
+            video.playsInline = true;
             video. preload = 'metadata';
             
             video.onloadeddata = function() {
-                video.currentTime = 0.5; // 跳到0.5秒位置
+                video.currentTime = 0.5;
             };
             
             video. onseeked = function() {
@@ -54,15 +68,13 @@
                     canvas.width = video.videoWidth || 320;
                     canvas.height = video. videoHeight || 180;
                     var ctx = canvas.getContext('2d');
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx. drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // 创建图片显示缩略图
                     var img = document.createElement('img');
                     img. src = canvas.toDataURL('image/jpeg', 0.8);
                     img.className = 'video-thumb-canvas';
-                    img.alt = 'Video thumbnail';
+                    img. alt = 'Video thumbnail';
                     
-                    // 隐藏占位符，显示缩略图
                     var placeholder = container.querySelector('.video-placeholder');
                     if (placeholder) placeholder.style.display = 'none';
                     container.insertBefore(img, container.firstChild);
@@ -90,7 +102,7 @@
             }
             
             // 为所有视频生成缩略图
-            document.querySelectorAll('. video-container').forEach(function(container) {
+            document.querySelectorAll('.video-container').forEach(function(container) {
                 var videoSrc = container.getAttribute('data-video-src');
                 if (videoSrc) {
                     generateVideoThumbnail(container, videoSrc);
@@ -107,10 +119,12 @@
         </div>
     </nav>
 
-    <!-- 公告 -->
+    <!-- 公告（滚动） -->
     {% if notice %}
-    <div class="notice-bg text-white p-3 text-center text-sm font-medium border-b border-white/10">
-        欢迎访问 Matrix Hub {{ notice }}
+    <div class="notice-bg text-white p-3 text-sm font-medium border-b border-white/10">
+        <div class="marquee">
+            <span class="marquee-content">欢迎访问 Matrix Hub {{ notice }}</span>
+        </div>
     </div>
     {% endif %}
 
@@ -120,7 +134,7 @@
             <div class="search-bg rounded-xl px-4 py-3 flex items-center">
                 <input type="text" name="q" value="{{ q }}" placeholder="搜索情报..." 
                        class="bg-transparent w-full text-gray-300 placeholder-gray-500 outline-none text-sm">
-                <button type="submit" class="text-gray-400 hover:text-white ml-2">
+                <button type="submit" class="text-gray-400 hover: text-white ml-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
@@ -138,16 +152,14 @@
                 
                 <!-- 左侧媒体区域 -->
                 <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
-                    {% if post.first_media and (post.first_media.endswith('. mp4') or post.first_media. endswith('.mov')) %}
+                    {% if post.first_media and (post.first_media. endswith('. mp4') or post.first_media. endswith('.mov')) %}
                     <!-- 视频容器 -->
                     <div class="video-container w-full h-full" data-video-src="{{ post.first_media }}">
-                        <!-- 占位符（Canvas 生成缩略图前显示） -->
                         <div class="video-placeholder w-full h-full absolute inset-0">
                             <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                             </svg>
                         </div>
-                        <!-- 播放图标覆盖层 -->
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                             <div class="bg-black/40 rounded-full p-2">
                                 <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20">
@@ -156,7 +168,7 @@
                             </div>
                         </div>
                     </div>
-                    {% elif post. first_media %}
+                    {% elif post.first_media %}
                     <!-- 图片 -->
                     <img src="{{ post.first_media }}" class="w-full h-full object-cover" 
                          onerror="this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
@@ -169,15 +181,15 @@
                 </div>
 
                 <!-- 右侧文字区域 -->
-                <div class="flex-1 p-4 flex flex-col justify-between min-w-0">
+                <div class="flex-1 p-4 flex flex-col justify-start min-w-0">
                     <div class="text-blue-400 text-xs font-bold mb-2">{{ post. date }}</div>
-                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap">
+                    <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left">
                         {{ post.text if post. text else '查看详情' }}
                     </div>
-                    <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                    <div class="flex items-center gap-3 mt-auto pt-2 text-xs text-gray-500">
                         <span class="text-pink-400">❤️ {{ post. likes }}</span>
                         {% if post.blacklist_count %}
-                        <span>🚫 {{ post. blacklist_count }}</span>
+                        <span>🚫 {{ post.blacklist_count }}</span>
                         {% endif %}
                     </div>
                 </div>
