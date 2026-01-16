@@ -5,43 +5,54 @@
     <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #050505; color: #f1f1f1; }
-        .post-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); transition: opacity 0.3s; }
-        .video-tag::after { content: '▶'; position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 12px; color: white; border-radius: 1rem; }
+        body { background: #050505; color: #f1f1f1; -webkit-tap-highlight-color: transparent; }
+        .post-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); transition: transform 0.2s; }
+        .post-card:active { transform: scale(0.98); }
+        .video-tag::after { content: '▶'; position: absolute; inset: 0; background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-size: 14px; color: white; border-radius: 1rem; }
     </style>
 </head>
 <body class="pb-20">
+    <!-- 顶部导航与搜索 -->
     <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 p-4">
         <div class="max-w-xl mx-auto space-y-3">
-            <h1 class="text-xl font-black text-blue-500 text-center">MATRIX HUB</h1>
+            <h1 class="text-xl font-black text-blue-500 text-center tracking-tighter">MATRIX HUB</h1>
             {% if notice %}<div class="text-[10px] text-center text-blue-300 py-1 bg-blue-500/10 rounded-lg border border-blue-500/20">{{ notice }}</div>{% endif %}
-            <form action="/" class="relative"><input type="text" name="q" value="{{q}}" placeholder="搜索内容..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500"></form>
+            <form action="/" class="relative">
+                <input type="text" name="q" value="{{q}}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-xl py-2 px-4 text-sm outline-none focus:border-blue-500 transition-colors">
+            </form>
         </div>
     </nav>
 
+    <!-- 列表流 -->
     <main class="max-w-xl mx-auto px-4 mt-6 space-y-4">
         {% for post in posts %}
-        <div id="p-{{ post.id }}" class="post-card rounded-2xl p-3 flex gap-4">
+        <div id="p-{{ post.id }}" class="post-card rounded-3xl p-3 flex gap-4 overflow-hidden">
+            <!-- 左侧媒体封面 -->
             <a href="/post/{{ post.id }}" class="w-24 h-24 rounded-2xl overflow-hidden bg-gray-900 flex-shrink-0 relative">
                 {% if post.first_media %}
                     {% if post.first_media.endswith('.mp4') %}
                         <video src="{{ post.first_media }}#t=0.1" playsinline muted preload="metadata" class="w-full h-full object-cover"></video>
                         <div class="video-tag"></div>
-                    {% else %}<img src="{{ post.first_media }}" class="w-full h-full object-cover">{% endif %}
+                    {% else %}
+                        <img src="{{ post.first_media }}" class="w-full h-full object-cover" loading="lazy">
+                    {% endif %}
                 {% endif %}
-                {% if post.media_group_id %}<div class="absolute bottom-1 right-1 bg-black/70 text-[8px] px-1.5 py-0.5 rounded text-white/80">图集</div>{% endif %}
+                {% if post.media_group_id %}
+                <div class="absolute bottom-1 right-1 bg-black/70 text-[8px] px-1.5 py-0.5 rounded-md text-white/80 border border-white/10">图集</div>
+                {% endif %}
             </a>
 
-            <div class="flex-1 min-w-0 flex flex-col justify-between">
+            <!-- 右侧文案内容 -->
+            <div class="flex-1 min-w-0 flex flex-col justify-between py-1">
                 <a href="/post/{{ post.id }}">
                     <div class="flex justify-between items-center mb-1">
                         <span class="text-[10px] text-blue-500/70 font-mono">{{ post.date }}</span>
-                        <span class="text-[9px] bg-white/5 px-2 py-0.5 rounded text-gray-500">{{ post.title }}</span>
+                        <span class="text-[9px] bg-white/5 px-2 py-0.5 rounded text-gray-500 uppercase font-bold">{{ post.title }}</span>
                     </div>
                     <p class="text-[13px] text-gray-300 leading-snug line-clamp-3 whitespace-pre-wrap">{{ post.text }}</p>
                 </a>
-                <div class="flex justify-end gap-3 mt-2">
-                    <button onclick="blockMe('{{post.id}}')" class="text-[10px] text-gray-700 hover:text-red-500">屏蔽</button>
+                <div class="flex justify-end mt-2">
+                    <button onclick="blockPost('{{post.id}}')" class="text-[10px] text-gray-700 hover:text-red-500 active:text-red-600 transition-colors">不再显示</button>
                 </div>
             </div>
         </div>
@@ -49,16 +60,24 @@
     </main>
 
     <script>
-        function blockMe(id) {
+        // 本地屏蔽功能
+        function blockPost(id) {
             if(!confirm('要在本地隐藏此内容吗？')) return;
             let b = JSON.parse(localStorage.getItem('m_block') || '[]');
-            if(!b.includes(id)) b.push(id);
+            if(!b.includes(id)) b.push(id.toString());
             localStorage.setItem('m_block', JSON.stringify(b));
-            document.getElementById('p-'+id).style.display = 'none';
+            const el = document.getElementById('p-'+id);
+            el.style.opacity = '0';
+            setTimeout(() => el.style.display = 'none', 300);
         }
+
+        // 初始化过滤
         window.onload = () => {
             let b = JSON.parse(localStorage.getItem('m_block') || '[]');
-            b.forEach(id => { if(document.getElementById('p-'+id)) document.getElementById('p-'+id).style.display = 'none'; });
+            b.forEach(id => {
+                const el = document.getElementById('p-'+id);
+                if(el) el.style.display = 'none';
+            });
         };
     </script>
 </body>
