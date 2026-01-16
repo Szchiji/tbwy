@@ -1,108 +1,85 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Hub</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Hub - 媒体中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #050505; color: #f1f1f1; font-family: system-ui, sans-serif; }
-        .post-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }
-        .loading-text { text-align: center; padding: 20px; font-size: 12px; color: #444; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-feed { animation: fadeIn 0.4s ease forwards; }
+        .post-card.hidden-blocked { display: none; }
+        .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; }
+        .video-wrapper video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
     </style>
 </head>
-<body class="pb-10">
-    <nav class="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/5 p-4">
-        <div class="max-w-xl mx-auto space-y-3">
-            <h1 class="text-xl font-black text-blue-500 text-center tracking-tighter">MATRIX HUB</h1>
-            {% if notice %}<div class="text-[10px] text-center text-blue-300 py-1.5 bg-blue-500/10 rounded-xl border border-blue-500/20 px-4">{{ notice }}</div>{% endif %}
-            <form id="searchForm" class="relative">
-                <input type="text" id="searchInp" name="q" value="{{q}}" placeholder="搜索关键词..." class="w-full bg-white/5 border border-white/10 rounded-2xl py-2.5 px-4 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all">
-            </form>
+<body class="bg-gray-50 min-h-screen text-gray-900">
+    <nav class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-black text-indigo-600 tracking-tight">MATRIX HUB</h1>
+            <button onclick="resetBlocks()" class="text-xs font-bold text-gray-400 hover:text-indigo-600 uppercase tracking-widest">重置屏蔽</button>
         </div>
     </nav>
 
-    <main id="postList" class="max-w-xl mx-auto px-4 mt-6 space-y-4"></main>
-    <div id="loading" class="loading-text">正在加载更多内容...</div>
+    <main class="container mx-auto p-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" id="post-grid">
+            {% for post in posts %}
+            <div class="post-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group transition-all hover:shadow-xl hover:-translate-y-1" data-id="{{ post.id }}">
+                <div class="relative overflow-hidden">
+                    {% if post.file_type == 'video' %}
+                    <div class="video-wrapper">
+                        <video controls preload="none" poster="/uploads/{{ post.thumb_url if post.thumb_url else '' }}">
+                            <source src="/uploads/{{ post.file_path }}" type="video/mp4">
+                        </video>
+                    </div>
+                    {% else %}
+                    <img src="/uploads/{{ post.file_path }}" alt="Media" class="w-full h-64 object-cover transition-transform group-hover:scale-105">
+                    {% endif %}
+                    
+                    <button onclick="blockPost('{{ post.id }}')" class="absolute top-3 right-3 bg-white/90 backdrop-blur text-gray-800 text-[10px] font-bold px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition shadow-sm">
+                        屏蔽此帖
+                    </button>
+                </div>
+
+                <div class="p-5">
+                    <p class="text-sm text-gray-600 leading-relaxed line-clamp-2 mb-4">{{ post.content if post.content else '无描述内容' }}</p>
+                    <div class="flex justify-between items-center pt-4 border-t border-gray-50">
+                        <span class="text-[10px] font-medium text-gray-400 uppercase tracking-tight">{{ post.created_at[:10] }}</span>
+                        <a href="/uploads/{{ post.file_path }}" download class="text-indigo-600 text-xs font-bold hover:text-indigo-800">下载源文件</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
 
     <script>
-        let page = 1;
-        let loading = false;
-        let hasMore = true;
-        const query = new URLSearchParams(window.location.search).get('q') || '';
+        const STORAGE_KEY = 'matrix_blocked_v1';
 
-        async function fetchPosts() {
-            if (loading || !hasMore) return;
-            loading = true;
-            document.getElementById('loading').style.display = 'block';
-
-            try {
-                const res = await fetch(`/api/posts?page=${page}&q=${query}`);
-                const posts = await res.json();
-
-                if (posts.length === 0) {
-                    hasMore = false;
-                    document.getElementById('loading').innerText = page === 1 ? '暂无搜索结果' : '已触及宇宙边界';
-                    return;
-                }
-
-                const list = document.getElementById('postList');
-                posts.forEach(p => {
-                    const isVideo = p.first_media && p.first_media.toLowerCase().endsWith('.mp4');
-                    const card = `
-                        <div id="p-${p.id}" class="post-card rounded-[2rem] p-4 flex gap-5 animate-feed">
-                            <a href="/post/${p.id}" class="w-28 h-28 rounded-2xl overflow-hidden bg-gray-900 flex-shrink-0 relative shadow-2xl">
-                                <img src="${p.thumb_url || p.first_media}" class="w-full h-full object-cover" loading="lazy">
-                                ${isVideo ? '<div class="absolute inset-0 flex items-center justify-center bg-black/20 text-white text-xs">▶</div>' : ''}
-                                ${p.media_group_id ? '<div class="absolute bottom-1 right-1 bg-black/60 text-[8px] px-1.5 py-0.5 rounded text-white/70">图集</div>' : ''}
-                            </a>
-                            <div class="flex-1 min-w-0 flex flex-col justify-between py-1">
-                                <a href="/post/${p.id}">
-                                    <div class="flex justify-between items-center mb-1">
-                                        <span class="text-[10px] text-blue-500 font-mono font-bold">${p.date}</span>
-                                        <span class="text-[9px] bg-white/5 px-2 py-0.5 rounded text-gray-500 uppercase">${p.title}</span>
-                                    </div>
-                                    <p class="text-[14px] text-gray-300 leading-snug line-clamp-3 whitespace-pre-wrap">${p.text || '无标题内容'}</p>
-                                </a>
-                                <div class="flex justify-between items-center mt-2">
-                                    <span class="text-[10px] text-gray-600 italic">👁 ${p.views || 0}</span>
-                                    <button onclick="localBlock('${p.id}')" class="text-[10px] text-gray-700 hover:text-red-500 transition-colors">屏蔽</button>
-                                </div>
-                            </div>
-                        </div>`;
-                    list.insertAdjacentHTML('beforeend', card);
-                });
-
-                page++;
-                checkLocalBlocks();
-            } catch (err) { console.error(err); }
-            loading = false;
-            document.getElementById('loading').style.display = 'none';
+        function getBlocks() {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         }
 
-        function localBlock(id) {
-            if(!confirm('确定要在本地隐藏此内容吗？')) return;
-            let blocks = JSON.parse(localStorage.getItem('m_blocks') || '[]');
-            blocks.push(id.toString());
-            localStorage.setItem('m_blocks', JSON.stringify(blocks));
-            const el = document.getElementById('p-'+id);
-            if(el) el.style.display = 'none';
-        }
-
-        function checkLocalBlocks() {
-            let blocks = JSON.parse(localStorage.getItem('m_blocks') || '[]');
-            blocks.forEach(id => {
-                const el = document.getElementById('p-'+id);
-                if(el) el.style.display = 'none';
+        function applyBlocks() {
+            const blocked = getBlocks();
+            document.querySelectorAll('.post-card').forEach(card => {
+                card.classList.toggle('hidden-blocked', blocked.includes(card.dataset.id));
             });
         }
 
-        window.onscroll = () => {
-            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 600) fetchPosts();
-        };
+        function blockPost(id) {
+            const blocked = getBlocks();
+            if (!blocked.includes(id)) {
+                blocked.push(id);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(blocked));
+                applyBlocks();
+            }
+        }
 
-        window.onload = fetchPosts;
+        function resetBlocks() {
+            localStorage.removeItem(STORAGE_KEY);
+            applyBlocks();
+        }
+
+        document.addEventListener('DOMContentLoaded', applyBlocks);
     </script>
 </body>
 </html>
