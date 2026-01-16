@@ -256,6 +256,20 @@ def webhook():
 
         # 2. 管理员指令
         if str(uid) == str(MY_CHAT_ID) or str(p.chat.id) == str(MY_CHAT_ID):
+            if txt == '/admin':
+                admin_url = f"{BASE_URL}/?admin_key={ADMIN_KEY}"
+                msg = f"""🔧 管理员入口
+
+📱 点击进入管理模式：
+{admin_url}
+
+进入后点击任意帖子即可：
+- ✏️ 编辑描述
+- 🗑️ 删除帖子  
+- 🗑️ 删除评论"""
+                bot.send_message(MY_CHAT_ID, msg, disable_web_page_preview=True)
+                return 'OK'
+            
             if txt.startswith('/notice '):
                 with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
                 bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
