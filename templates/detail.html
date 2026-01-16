@@ -168,10 +168,23 @@
             });
         }
         
-        // 将文本中的 URL 转换为可点击链接
+        // 将文本中的 URL 转换为可点击链接（安全处理）
         function linkify(text) {
             const urlPattern = /(https?:\/\/[^\s<]+)/g;
-            return text.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+            // 首先转义 HTML 特殊字符
+            const div = document.createElement('div');
+            div.textContent = text;
+            const escapedText = div.innerHTML;
+            // 然后将 URL 转换为链接
+            return escapedText.replace(urlPattern, function(url) {
+                // 再次转义 URL 以防止 XSS
+                const a = document.createElement('a');
+                a.href = url;
+                a.textContent = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                return a.outerHTML;
+            });
         }
 
         window.onload = () => {
@@ -183,7 +196,8 @@
             
             // 将正文和评论中的链接转换为可点击
             document.querySelectorAll('.linkify').forEach(el => {
-                el.innerHTML = linkify(el.innerHTML);
+                const originalText = el.textContent || el.innerText;
+                el.innerHTML = linkify(originalText);
             });
         };
     </script>
