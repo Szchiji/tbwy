@@ -3,83 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Hub - 媒体中心</title>
+    <title>Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .post-card.hidden-blocked { display: none; }
-        .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; }
-        .video-wrapper video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-    </style>
 </head>
-<body class="bg-gray-50 min-h-screen text-gray-900">
-    <nav class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50 p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-black text-indigo-600 tracking-tight">MATRIX HUB</h1>
-            <button onclick="resetBlocks()" class="text-xs font-bold text-gray-400 hover:text-indigo-600 uppercase tracking-widest">重置屏蔽</button>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-white shadow-sm p-4 sticky top-0 z-50">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <a href="/" class="text-2xl font-black text-indigo-600">MATRIX HUB</a>
+            <form action="/" method="get" class="w-full md:w-1/3">
+                <input type="text" name="q" value="{{ q }}" placeholder="搜索内容..." class="w-full px-4 py-2 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </form>
         </div>
     </nav>
 
-    <main class="container mx-auto p-6">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8" id="post-grid">
+    {% if notice %}
+    <div class="bg-indigo-600 text-white p-2 text-center text-sm font-medium">
+        📢 {{ notice }}
+    </div>
+    {% endif %}
+
+    <main class="container mx-auto p-4 md:p-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {% for post in posts %}
-            <div class="post-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group transition-all hover:shadow-xl hover:-translate-y-1" data-id="{{ post.id }}">
-                <div class="relative overflow-hidden">
-                    {% if post.file_type == 'video' %}
-                    <div class="video-wrapper">
-                        <video controls preload="none" poster="/uploads/{{ post.thumb_url if post.thumb_url else '' }}">
-                            <source src="/uploads/{{ post.file_path }}" type="video/mp4">
-                        </video>
+            <div class="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition cursor-pointer" onclick="location.href='/post/{{ post.id }}'">
+                <div class="relative h-60 bg-gray-200">
+                    {% if post.first_media.endswith('.mp4') or post.first_media.endswith('.mov') %}
+                    <video class="w-full h-full object-cover">
+                        <source src="{{ post.first_media }}" type="video/mp4">
+                    </video>
+                    <div class="absolute inset-0 flex items-center justify-center bg-black/20 text-white">
+                        <svg class="w-12 h-12" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/></svg>
                     </div>
                     {% else %}
-                    <img src="/uploads/{{ post.file_path }}" alt="Media" class="w-full h-64 object-cover transition-transform group-hover:scale-105">
+                    <img src="{{ post.first_media }}" class="w-full h-full object-cover">
                     {% endif %}
-                    
-                    <button onclick="blockPost('{{ post.id }}')" class="absolute top-3 right-3 bg-white/90 backdrop-blur text-gray-800 text-[10px] font-bold px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition shadow-sm">
-                        屏蔽此帖
-                    </button>
                 </div>
-
-                <div class="p-5">
-                    <p class="text-sm text-gray-600 leading-relaxed line-clamp-2 mb-4">{{ post.content if post.content else '无描述内容' }}</p>
-                    <div class="flex justify-between items-center pt-4 border-t border-gray-50">
-                        <span class="text-[10px] font-medium text-gray-400 uppercase tracking-tight">{{ post.created_at[:10] }}</span>
-                        <a href="/uploads/{{ post.file_path }}" download class="text-indigo-600 text-xs font-bold hover:text-indigo-800">下载源文件</a>
+                <div class="p-4">
+                    <p class="text-gray-700 text-sm line-clamp-2 mb-4">{{ post.text if post.text else '查看详情' }}</p>
+                    <div class="flex justify-between items-center text-[10px] text-gray-400 font-bold uppercase">
+                        <span>{{ post.date }}</span>
+                        <span class="text-indigo-500">❤️ {{ post.likes }}</span>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
     </main>
-
-    <script>
-        const STORAGE_KEY = 'matrix_blocked_v1';
-
-        function getBlocks() {
-            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        }
-
-        function applyBlocks() {
-            const blocked = getBlocks();
-            document.querySelectorAll('.post-card').forEach(card => {
-                card.classList.toggle('hidden-blocked', blocked.includes(card.dataset.id));
-            });
-        }
-
-        function blockPost(id) {
-            const blocked = getBlocks();
-            if (!blocked.includes(id)) {
-                blocked.push(id);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(blocked));
-                applyBlocks();
-            }
-        }
-
-        function resetBlocks() {
-            localStorage.removeItem(STORAGE_KEY);
-            applyBlocks();
-        }
-
-        document.addEventListener('DOMContentLoaded', applyBlocks);
-    </script>
 </body>
 </html>
