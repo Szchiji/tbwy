@@ -1,4 +1,4 @@
-import os, sqlite3, requests, telebot, datetime, mimetypes
+import os, sqlite3, requests, telebot, datetime, mimetypes, cv2
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
@@ -68,21 +68,51 @@ def init_db():
         if 'custom_description' not in columns:
             try: conn.execute("ALTER TABLE posts ADD COLUMN custom_description TEXT")
             except: pass
+        if 'thumbnail' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN thumbnail TEXT")
+            except: pass
 
 init_db()
 
 # --- 媒体处理 ---
+def generate_video_thumbnail(video_path, thumbnail_path):
+    """使用 cv2 生成视频缩略图"""
+    try:
+        cap = cv2.VideoCapture(video_path)
+        # 尝试定位到1秒位置
+        cap.set(cv2.CAP_PROP_POS_MSEC, 1000)
+        success, frame = cap.read()
+        if success:
+            # 调整大小到宽度320
+            height, width = frame.shape[:2]
+            new_width = 320
+            new_height = int(height * (new_width / width))
+            resized = cv2.resize(frame, (new_width, new_height))
+            cv2.imwrite(thumbnail_path, resized)
+        cap.release()
+        return success
+    except Exception as e:
+        print(f"Thumbnail generation error: {e}")
+        return False
+
 def download_media(p):
     media_obj = p.photo[-1] if p.photo else (p.video if p.video else None)
-    if not media_obj: return None
+    if not media_obj: return None, None
     
     # 获取后缀
     ext = ".jpg" if p.photo else ".mp4"
     save_name = f"{media_obj.file_id}{ext}"
     target_path = os.path.join(UPLOAD_DIR, save_name)
+    thumbnail_path = None
     
     if os.path.exists(target_path): 
-        return f"/uploads/{save_name}"
+        # 检查缩略图是否存在
+        if ext == ".mp4":
+            thumb_name = f"{media_obj.file_id}_thumb.jpg"
+            thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
+            if os.path.exists(thumb_path):
+                thumbnail_path = f"/uploads/{thumb_name}"
+        return f"/uploads/{save_name}", thumbnail_path
         
     try:
         file_info = bot.get_file(media_obj.file_id)
@@ -91,10 +121,18 @@ def download_media(p):
             if r.status_code == 200:
                 with open(target_path, 'wb') as f:
                     for chunk in r.iter_content(chunk_size=8192): f.write(chunk)
-                return f"/uploads/{save_name}"
+                
+                # 如果是视频，生成缩略图
+                if ext == ".mp4":
+                    thumb_name = f"{media_obj.file_id}_thumb.jpg"
+                    thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
+                    if generate_video_thumbnail(target_path, thumb_path):
+                        thumbnail_path = f"/uploads/{thumb_name}"
+                
+                return f"/uploads/{save_name}", thumbnail_path
     except Exception as e:
         print(f"Download Error: {e}")
-    return None
+    return None, None
 
 @app.route('/uploads/<path:filename>')
 def serve_uploads(filename):
@@ -154,11 +192,11 @@ def webhook():
                 bot.send_message(MY_CHAT_ID, "🔄 正在同步频道...")
                 history = bot.get_chat_history(CHANNEL_ID, limit=50)
                 for h in history:
-                    path = download_media(h)
+                    path, thumbnail = download_media(h)
                     if path:
                         with get_db() as conn:
-                            conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, is_approved) VALUES (?,?,?,?,?,?,1)",
-                                         (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path))
+                            conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
+                                         (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
                 bot.send_message(MY_CHAT_ID, "✅ 同步完成")
                 return 'OK'
 
@@ -168,15 +206,15 @@ def webhook():
                 if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return 'OK'
 
         # 4. 入库处理
-        path = download_media(p)
+        path, thumbnail = download_media(p)
         if path:
             if (update.edited_channel_post or update.edited_message):
-                with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=? WHERE msg_id=?", (txt, path, p.message_id))
+                with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=?, thumbnail=? WHERE msg_id=?", (txt, path, thumbnail, p.message_id))
             else:
                 with get_db() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, is_approved, user_id) VALUES (?,?,?,?,?,?,?,?)",
-                                   (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, 1 if update.channel_post else 0, uid))
+                    cursor.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved, user_id) VALUES (?,?,?,?,?,?,?,?,?)",
+                                   (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, thumbnail, 1 if update.channel_post else 0, uid))
                     new_id = cursor.lastrowid
                 
                 # 5. 投稿审核提醒
