@@ -31,7 +31,7 @@ def get_db():
 def init_db():
     """ 
     初始化数据库并处理自动迁移。
-    如果缺少列，程序会自动尝试 ALTER TABLE 补齐。
+    修复 SQLite 无法在 ALTER TABLE 中使用 CURRENT_TIMESTAMP 的问题。
     """
     conn = get_db()
     # 1. 创建基础表（如果不存在）
@@ -47,30 +47,36 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # 2. 动态检查并补齐缺失的列 (防止 sqlite3.OperationalError: no such column)
+    # 2. 检查现有列
     cursor = conn.execute("PRAGMA table_info(posts)")
     existing_columns = [column[1] for column in cursor.fetchall()]
     
-    required_columns = {
-        'is_approved': "INTEGER DEFAULT 1",
-        'media_group_id': "TEXT",
-        'thumb_url': "TEXT",
-        'created_at': "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-        'tg_msg_id': "INTEGER"
-    }
+    # 定义需要补全的列
+    # 注意：对于 created_at，由于 SQLite 限制，ALTER TABLE 时不能用 CURRENT_TIMESTAMP
+    # 我们先添加一个允许为空的列，后续查询时再处理
+    migrations = [
+        ('is_approved', "INTEGER DEFAULT 1"),
+        ('media_group_id', "TEXT"),
+        ('thumb_url', "TEXT"),
+        ('tg_msg_id', "INTEGER"),
+        ('created_at', "TIMESTAMP") # 不带 DEFAULT CURRENT_TIMESTAMP 以绕过限制
+    ]
     
-    for col, definition in required_columns.items():
+    for col, definition in migrations:
         if col not in existing_columns:
-            print(f"检测到缺失列，正在升级数据库: {col}")
+            print(f"正在迁移数据库列: {col}")
             try:
                 conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {definition}")
+                # 如果是新加的 created_at，手动刷一下当前时间
+                if col == 'created_at':
+                    conn.execute("UPDATE posts SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
             except Exception as e:
-                print(f"数据库升级失败 ({col}): {e}")
+                print(f"列 {col} 迁移失败: {e}")
         
     conn.commit()
     conn.close()
 
-# 启动时执行初始化
+# 启动执行
 init_db()
 
 # --- 辅助工具 ---
@@ -134,7 +140,8 @@ def sync_history(message):
             if file_id:
                 fname = download_tg_file(file_id)
                 thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
-                conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?,?)",
+                # 显式插入当前时间以防万一
+                conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved, created_at) VALUES (?,?,?,?,?,?, CURRENT_TIMESTAMP)",
                              (msg.message_id, content, fname, file_type, thumb, 1))
         conn.commit()
         conn.close()
@@ -154,7 +161,8 @@ def handle_submission(message):
     
     conn = get_db()
     approved = 1 if is_admin else 0
-    cursor = conn.execute("INSERT INTO posts (content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?)",
+    # 显式插入时间
+    cursor = conn.execute("INSERT INTO posts (content, file_path, file_type, thumb_url, is_approved, created_at) VALUES (?,?,?,?,?, CURRENT_TIMESTAMP)",
                          (caption, fname, file_type, thumb, approved))
     post_id = cursor.lastrowid
     conn.commit()
@@ -192,15 +200,14 @@ def admin_action(call):
 def index():
     try:
         conn = get_db()
-        # 确保 created_at 存在后进行排序
-        query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY created_at DESC"
+        # 使用 COALESCE 处理那些 created_at 可能为 NULL 的旧数据
+        query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY COALESCE(created_at, '2000-01-01') DESC"
         posts = conn.execute(query).fetchall()
         conn.close()
         return render_template('index.html', posts=posts)
-    except sqlite3.OperationalError:
-        # 万一迁移失败的后手逻辑
-        init_db()
-        return "数据库正在自动升级，请刷新页面...", 503
+    except Exception as e:
+        print(f"Index error: {e}")
+        return "数据库更新中，请刷新页面...", 503
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
