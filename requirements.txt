@@ -1,5 +1,6 @@
+
 flask
 requests
-Telegram Bot SDK
 pyTelegramBotAPI
 opencv-python-headless
+gunicorn
