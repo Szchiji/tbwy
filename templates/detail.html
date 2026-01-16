@@ -222,6 +222,7 @@
         
         function deleteComment(commentId, commentUserId) {
             const currentUserId = getUserId();
+            // Note: Client-side validation for better UX, but server enforces authorization
             if (commentUserId !== currentUserId) {
                 alert('您只能删除自己的评论');
                 return;

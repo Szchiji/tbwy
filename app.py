@@ -1,4 +1,4 @@
-import os, sqlite3, requests, telebot, datetime, mimetypes, cv2
+import os, sqlite3, requests, telebot, datetime, mimetypes, cv2, html
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
@@ -15,6 +15,9 @@ rate_limit_storage = defaultdict(lambda: {'count': 0, 'reset_time': time.time()}
 
 def check_rate_limit(identifier, max_requests=10, window_seconds=60):
     """简单的速率限制检查
+    
+    注意：此实现使用共享的 defaultdict 且不是线程安全的。
+    在生产环境中，建议使用 Redis 或其他线程安全的存储方案。
     
     Args:
         identifier: 用户标识符 (如 user_id 或 IP)
@@ -96,6 +99,8 @@ def init_db():
         ''')
         
         # 字段自动迁移逻辑 (安全处理旧数据库)
+        # 注意：这是简单的迁移方案，适合小型项目
+        # 生产环境建议使用 Alembic 等专业的数据库迁移工具
         cursor = conn.execute("PRAGMA table_info(posts)")
         columns = [c[1] for c in cursor.fetchall()]
         if 'user_id' not in columns:
@@ -377,7 +382,6 @@ def comment(post_id):
     
     # XSS protection: escape HTML content
     if content:
-        import html
         content = html.escape(content)
         with get_db() as conn: 
             conn.execute("INSERT INTO comments (post_id, content, date, user_id) VALUES (?,?,?,?)", 
