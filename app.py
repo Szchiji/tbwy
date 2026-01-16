@@ -42,11 +42,14 @@ def init_db():
                 media_group_id TEXT, 
                 first_media TEXT, 
                 is_approved INTEGER DEFAULT 1, 
-                user_id INTEGER
+                user_id INTEGER,
+                blacklist_count INTEGER DEFAULT 0,
+                custom_description TEXT
             );
             CREATE TABLE IF NOT EXISTS blacklist (user_id INTEGER PRIMARY KEY, date TEXT);
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT);
+            CREATE TABLE IF NOT EXISTS user_blacklist (user_id TEXT, post_id INTEGER, date TEXT, PRIMARY KEY (user_id, post_id));
             INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub');
         ''')
         
@@ -58,6 +61,12 @@ def init_db():
             except: pass
         if 'is_approved' not in columns:
             try: conn.execute("ALTER TABLE posts ADD COLUMN is_approved INTEGER DEFAULT 1")
+            except: pass
+        if 'blacklist_count' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN blacklist_count INTEGER DEFAULT 0")
+            except: pass
+        if 'custom_description' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN custom_description TEXT")
             except: pass
 
 init_db()
@@ -129,6 +138,18 @@ def webhook():
                 bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
                 return 'OK'
             
+            if txt.startswith('/desc '):
+                # 格式: /desc <post_id> <描述文字>
+                parts = txt[6:].split(' ', 1)
+                if len(parts) == 2:
+                    post_id, desc = parts
+                    with get_db() as conn: 
+                        conn.execute("UPDATE posts SET custom_description=? WHERE id=?", (desc, int(post_id)))
+                    bot.send_message(MY_CHAT_ID, f"✅ 已为帖子 {post_id} 设置自定义描述")
+                else:
+                    bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /desc <post_id> <描述文字>")
+                return 'OK'
+            
             if txt == '/sync':
                 bot.send_message(MY_CHAT_ID, "🔄 正在同步频道...")
                 history = bot.get_chat_history(CHANNEL_ID, limit=50)
@@ -173,12 +194,17 @@ def webhook():
 @app.route('/')
 def index():
     q = request.args.get('q', '')
+    user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
-        # 分组查询：如果是媒体组只显示一张
-        sql = "SELECT * FROM posts WHERE is_approved=1 AND text LIKE ? GROUP BY COALESCE(media_group_id, id) ORDER BY id DESC"
-        posts = conn.execute(sql, (f'%{q}%',)).fetchall()
-    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", q=q)
+        # 分组查询：如果是媒体组只显示一张，排除用户拉黑的内容
+        sql = """SELECT p.* FROM posts p 
+                 WHERE p.is_approved=1 AND p.text LIKE ? 
+                 AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
+                 GROUP BY COALESCE(p.media_group_id, p.id) 
+                 ORDER BY p.id DESC"""
+        posts = conn.execute(sql, (f'%{q}%', user_id)).fetchall()
+    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", q=q, user_id=user_id)
 
 @app.route('/post/<int:post_id>')
 def detail(post_id):
@@ -206,6 +232,17 @@ def comment(post_id):
     content = request.json.get('content')
     if content:
         with get_db() as conn: conn.execute("INSERT INTO comments (post_id, content, date) VALUES (?,?,?)", (post_id, content, datetime.now().strftime("%m-%d %H:%M")))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/blacklist/<int:post_id>', methods=['POST'])
+def blacklist_user(post_id):
+    user_id = request.json.get('user_id', 'anonymous')
+    with get_db() as conn:
+        # Check if user already blacklisted this post
+        existing = conn.execute("SELECT 1 FROM user_blacklist WHERE user_id=? AND post_id=?", (user_id, post_id)).fetchone()
+        if not existing:
+            conn.execute("INSERT INTO user_blacklist (user_id, post_id, date) VALUES (?,?,?)", (user_id, post_id, datetime.now().strftime("%Y-%m-%d")))
+            conn.execute("UPDATE posts SET blacklist_count=blacklist_count+1 WHERE id=?", (post_id,))
     return jsonify({"status":"ok"})
 
 if __name__ == '__main__':

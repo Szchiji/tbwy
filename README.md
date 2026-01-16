@@ -84,6 +84,7 @@ gunicorn app:app
 在 Telegram 中向机器人发送以下命令：
 
 - `/notice <内容>` - 更新网站公告
+- `/desc <post_id> <描述文字>` - 为指定帖子添加自定义描述（显示在详情页点赞按钮上方）
 - `/sync` - 同步频道最近 50 条内容
 
 ## 数据库结构
@@ -95,6 +96,8 @@ gunicorn app:app
 - `title`: 标题（官方/投稿）
 - `date`: 发布日期
 - `likes`: 点赞数
+- `blacklist_count`: 拉黑数量
+- `custom_description`: 管理员自定义描述
 - `media_group_id`: 媒体组 ID
 - `first_media`: 首张媒体路径
 - `is_approved`: 审核状态
@@ -103,6 +106,11 @@ gunicorn app:app
 ### blacklist 表
 - `user_id`: 黑名单用户 ID
 - `date`: 添加日期
+
+### user_blacklist 表
+- `user_id`: 拉黑操作的用户ID（客户端生成）
+- `post_id`: 被拉黑的帖子ID
+- `date`: 拉黑日期
 
 ### settings 表
 - `key`: 设置键
@@ -116,9 +124,10 @@ gunicorn app:app
 
 ## API 端点
 
-- `GET /` - 首页（带搜索参数 `?q=`）
+- `GET /` - 首页（带搜索参数 `?q=` 和用户ID参数 `?user_id=`）
 - `GET /post/<post_id>` - 内容详情页
 - `POST /api/like/<post_id>` - 点赞
+- `POST /api/blacklist/<post_id>` - 拉黑内容（需要传递 user_id）
 - `POST /api/comment/<post_id>` - 发表评论
 - `POST /webhook` - Telegram Webhook 接收端点
 - `GET /uploads/<filename>` - 媒体文件服务
@@ -145,6 +154,17 @@ tbwy/
 ### 2024 年修复
 1. **InlineKeyboardButton 参数错误**: 将 `callback_query_data` 修正为 `callback_data`
 2. **模板变量引用错误**: 修正 `detail.html` 中的 `m.first_media` 为 `m`（all_media 是字符串列表）
+
+### 2026 年新增功能
+1. **卡片布局优化**: 首页卡片采用横向布局（左图右文），高度从 240px 减小到 128px
+2. **视频封面显示**: 添加 `preload="metadata"` 和时间戳参数以显示视频第一帧作为封面
+3. **用户拉黑功能**: 
+   - 用户可以拉黑不喜欢的内容
+   - 拉黑后该内容不再在首页显示
+   - 全站显示每个帖子的拉黑数量
+   - 拉黑按钮显示在点赞按钮旁边
+4. **管理员自定义描述**: 管理员可通过 `/desc` 命令为帖子添加自定义描述，显示在详情页点赞按钮上方
+5. **用户识别系统**: 使用本地存储生成唯一用户ID，用于追踪点赞和拉黑记录
 
 ## License
 
