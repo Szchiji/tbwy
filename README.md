@@ -112,6 +112,11 @@ gunicorn app:app
 - `post_id`: 被拉黑的帖子ID
 - `date`: 拉黑日期
 
+### user_favorites 表
+- `user_id`: 用户ID（客户端生成）
+- `post_id`: 收藏的帖子ID
+- `date`: 收藏日期
+
 ### settings 表
 - `key`: 设置键
 - `value`: 设置值
@@ -121,14 +126,23 @@ gunicorn app:app
 - `post_id`: 关联的帖子 ID
 - `content`: 评论内容
 - `date`: 评论日期
+- `user_id`: 评论者用户ID（客户端生成）
 
 ## API 端点
 
-- `GET /` - 首页（带搜索参数 `?q=` 和用户ID参数 `?user_id=`）
+### 页面路由
+- `GET /` - 首页（支持分页参数 `?page=`，搜索参数 `?q=`，用户ID参数 `?user_id=`）
 - `GET /post/<post_id>` - 内容详情页
-- `POST /api/like/<post_id>` - 点赞
+- `GET /favorites` - 收藏页面（需要 `?user_id=` 参数）
+
+### API 接口
+- `POST /api/like/<post_id>` - 点赞（支持速率限制：10次/分钟）
 - `POST /api/blacklist/<post_id>` - 拉黑内容（需要传递 user_id）
-- `POST /api/comment/<post_id>` - 发表评论
+- `POST /api/comment/<post_id>` - 发表评论（支持速率限制：5次/分钟，自动 XSS 防护）
+- `DELETE /api/comment/<comment_id>` - 删除评论（需要用户授权）
+- `POST /api/favorite/<post_id>` - 添加到收藏
+- `DELETE /api/favorite/<post_id>` - 从收藏移除
+- `GET /api/favorites` - 获取用户的收藏列表
 - `POST /webhook` - Telegram Webhook 接收端点
 - `GET /uploads/<filename>` - 媒体文件服务
 
@@ -141,8 +155,9 @@ tbwy/
 ├── runtime.txt         # Python 版本
 ├── Procfile           # 部署配置
 ├── templates/         # HTML 模板
-│   ├── index.html    # 首页
-│   └── detail.html   # 详情页
+│   ├── index.html    # 首页（带底部导航和分页）
+│   ├── detail.html   # 详情页（带收藏、分享、图片放大等功能）
+│   └── favorites.html # 收藏页面
 ├── data/             # 数据目录（自动创建）
 │   ├── data.db      # SQLite 数据库
 │   └── uploads/     # 媒体文件存储
@@ -165,6 +180,23 @@ tbwy/
    - 拉黑按钮显示在点赞按钮旁边
 4. **管理员自定义描述**: 管理员可通过 `/desc` 命令为帖子添加自定义描述，显示在详情页点赞按钮上方
 5. **用户识别系统**: 使用本地存储生成唯一用户ID，用于追踪点赞和拉黑记录
+6. **收藏功能** (2026-01-16 新增):
+   - 用户可以收藏喜欢的帖子
+   - 收藏数据存储在数据库中
+   - 提供专门的收藏页面查看所有收藏
+   - 详情页一键收藏/取消收藏
+7. **分页功能**: 首页支持分页浏览，每页显示 20 条内容
+8. **底部导航栏**: 新增底部导航栏（首页、搜索、收藏、我的）
+9. **分享功能**: 详情页可一键复制链接分享
+10. **图片放大预览**: 图片支持点击放大查看（Lightbox 效果）
+11. **返回顶部按钮**: 详情页滚动时显示返回顶部按钮
+12. **安全增强**:
+    - XSS 防护：评论内容自动转义 HTML
+    - API 请求频率限制（防止滥用）
+    - 评论删除权限验证（只能删除自己的评论）
+13. **性能优化**:
+    - 数据库索引优化
+    - 分页查询提升加载速度
 
 ## License
 
