@@ -310,6 +310,14 @@ def blacklist_user(post_id):
             conn.execute("UPDATE posts SET blacklist_count=blacklist_count+1 WHERE id=?", (post_id,))
     return jsonify({"status":"ok"})
 
+@app.route('/api/comment/<int:comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    # 简单删除，不验证用户（因为评论没有存储 user_id）
+    # 实际生产环境应该验证用户权限
+    with get_db() as conn:
+        conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
+    return jsonify({"status":"ok"})
+
 if __name__ == '__main__':
     # 自动设置 Webhook
     if BASE_URL and BOT_TOKEN:
