@@ -85,10 +85,11 @@ def generate_video_thumbnail(video_path, thumbnail_path):
     Returns:
         bool: 成功返回True，失败返回False
     """
+    cap = None
     try:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            print(f"Thumbnail generation error: Cannot open video file")
+            print(f"Thumbnail generation error: Cannot open video file {video_path}")
             return False
             
         # 尝试定位到1秒位置，如果视频太短则使用第一帧
@@ -107,11 +108,14 @@ def generate_video_thumbnail(video_path, thumbnail_path):
             new_height = int(height * (new_width / width))
             resized = cv2.resize(frame, (new_width, new_height))
             cv2.imwrite(thumbnail_path, resized)
-        cap.release()
-        return success
+            return True
+        return False
     except Exception as e:
         print(f"Thumbnail generation error: {e}")
         return False
+    finally:
+        if cap is not None:
+            cap.release()
 
 def download_media(p):
     media_obj = p.photo[-1] if p.photo else (p.video if p.video else None)
