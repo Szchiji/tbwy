@@ -54,6 +54,10 @@ MY_CHAT_ID = os.environ.get("MY_CHAT_ID")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 # 获取公网 URL 用于 Webhook (可选)
 BASE_URL = os.environ.get("BASE_URL", "").rstrip('/')
+# 管理员密钥（生产环境务必设置强密码）
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "matrix_admin_2024")
+if ADMIN_KEY == "matrix_admin_2024":
+    print("WARNING: Using default ADMIN_KEY. Please set ADMIN_KEY environment variable for production!")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
@@ -341,6 +345,9 @@ def index():
 @app.route('/post/<int:post_id>')
 def detail(post_id):
     user_id = request.args.get('user_id', 'anonymous')
+    admin_key = request.args.get('admin_key', '')
+    is_admin = (admin_key == ADMIN_KEY)
+    
     with get_db() as conn:
         post = conn.execute("SELECT * FROM posts WHERE id=?", (post_id,)).fetchone()
         if not post: return "404", 404
@@ -358,7 +365,7 @@ def detail(post_id):
         is_favorited = conn.execute("SELECT 1 FROM user_favorites WHERE user_id=? AND post_id=?", (user_id, post_id)).fetchone() is not None
         
     return render_template('detail.html', post=post, all_media=all_media, comments=comments, 
-                         is_favorited=is_favorited, user_id=user_id)
+                         is_favorited=is_favorited, user_id=user_id, is_admin=is_admin)
 
 @app.route('/api/like/<int:post_id>', methods=['POST'])
 def like(post_id):
@@ -399,18 +406,6 @@ def blacklist_user(post_id):
             conn.execute("UPDATE posts SET blacklist_count=blacklist_count+1 WHERE id=?", (post_id,))
     return jsonify({"status":"ok"})
 
-@app.route('/api/comment/<int:comment_id>', methods=['DELETE'])
-def delete_comment(comment_id):
-    # 验证用户权限：只允许评论所有者删除
-    user_id = request.json.get('user_id', 'anonymous')
-    with get_db() as conn:
-        comment = conn.execute("SELECT user_id FROM comments WHERE id=?", (comment_id,)).fetchone()
-        if comment and comment['user_id'] == user_id:
-            conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
-            return jsonify({"status":"ok"})
-        else:
-            return jsonify({"status":"error", "message":"无权限删除此评论"}), 403
-
 @app.route('/api/favorite/<int:post_id>', methods=['POST', 'DELETE'])
 def toggle_favorite(post_id):
     user_id = request.json.get('user_id', 'anonymous')
@@ -450,6 +445,59 @@ def favorites_page():
             ORDER BY f.date DESC
         """, (user_id,)).fetchall()
     return render_template('favorites.html', posts=posts, notice=notice['value'] if notice else "", user_id=user_id)
+
+@app.route('/profile')
+def profile():
+    user_id = request.args.get('user_id', 'anonymous')
+    with get_db() as conn:
+        # 获取用户收藏
+        favorites = conn.execute("""
+            SELECT p.* FROM posts p 
+            JOIN user_favorites f ON p.id = f.post_id 
+            WHERE f.user_id = ? ORDER BY f.date DESC LIMIT 10
+        """, (user_id,)).fetchall()
+        
+        # 获取用户评论
+        comments = conn.execute("""
+            SELECT c.*, p.id as post_id, p.text as post_text 
+            FROM comments c 
+            JOIN posts p ON c.post_id = p.id 
+            WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 10
+        """, (user_id,)).fetchall()
+        
+    return render_template('profile.html', favorites=favorites, comments=comments, user_id=user_id)
+
+@app.route('/api/admin/description/<int:post_id>', methods=['POST'])
+def update_description(post_id):
+    admin_key = request.json.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    description = request.json.get('description', '')
+    with get_db() as conn:
+        conn.execute("UPDATE posts SET custom_description=? WHERE id=?", (description, post_id))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/admin/post/<int:post_id>', methods=['DELETE'])
+def delete_post(post_id):
+    admin_key = request.json.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    with get_db() as conn:
+        # 删除帖子及相关数据（评论、收藏、拉黑记录）
+        conn.execute("DELETE FROM comments WHERE post_id=?", (post_id,))
+        conn.execute("DELETE FROM user_favorites WHERE post_id=?", (post_id,))
+        conn.execute("DELETE FROM user_blacklist WHERE post_id=?", (post_id,))
+        conn.execute("DELETE FROM posts WHERE id=?", (post_id,))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/admin/comment/<int:comment_id>', methods=['DELETE'])
+def admin_delete_comment(comment_id):
+    admin_key = request.json.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    with get_db() as conn:
+        conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
+    return jsonify({"status":"ok"})
 
 if __name__ == '__main__':
     # 自动设置 Webhook

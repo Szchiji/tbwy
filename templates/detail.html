@@ -74,6 +74,23 @@
         </div>
         {% endif %}
 
+        <!-- 管理员功能区域 -->
+        {% if is_admin %}
+        <div class="admin-panel bg-red-900/20 border border-red-500/30 rounded-2xl p-6 mb-6">
+            <div class="text-red-400 font-bold mb-4">🔧 管理员操作</div>
+            
+            <!-- 添加/修改描述 -->
+            <div class="mb-4">
+                <label class="text-gray-400 text-sm mb-2 block">自定义描述：</label>
+                <textarea id="adminDesc" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-red-500" rows="3" placeholder="输入管理员备注...">{{ post.custom_description or '' }}</textarea>
+                <button onclick="saveDescription()" class="mt-2 bg-red-600 px-4 py-2 rounded-xl text-sm font-bold">保存描述</button>
+            </div>
+            
+            <!-- 删除帖子 -->
+            <button onclick="deletePost()" class="bg-red-600/50 border border-red-500 px-4 py-2 rounded-xl text-sm font-bold text-red-300 hover:bg-red-600">🗑️ 删除此帖子</button>
+        </div>
+        {% endif %}
+
         <!-- 媒体展示 -->
         <div class="space-y-4 mb-8">
             {% for m in all_media %}
@@ -127,7 +144,9 @@
                     <p class="text-[14px] text-gray-300 leading-relaxed linkify">{{ c.content }}</p>
                     <div class="flex justify-between items-center mt-3">
                         <div class="text-[10px] text-gray-600 font-mono">{{ c.date }}</div>
-                        <button onclick="deleteComment({{ c.id }}, '{{ c.user_id or 'anonymous' }}')" class="text-red-400 text-xs hover:text-red-300 transition">🗑️ 删除</button>
+                        {% if is_admin %}
+                        <button onclick="deleteComment({{ c.id }})" class="text-red-400 text-xs hover:text-red-300 transition">🗑️ 删除</button>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -151,6 +170,10 @@
     <script>
         const pid = "{{ post.id }}";
         let isFavorited = {{ 'true' if is_favorited else 'false' }};
+        // Note: Admin key is exposed here by design - admin accesses via URL parameter ?admin_key=<key>
+        // This is a simple authentication mechanism. For production, consider using session-based auth.
+        const adminKey = "{{ request.args.get('admin_key', '') }}";
+        const isAdmin = {{ 'true' if is_admin else 'false' }};
         
         // 生成或获取用户ID
         function getUserId() {
@@ -172,6 +195,48 @@
             let blacklisted = getBlacklistedItems();
             blacklisted.push(itemId);
             localStorage.setItem('m_blacklisted', JSON.stringify(blacklisted));
+        }
+        
+        // 管理员保存描述
+        function saveDescription() {
+            if (!isAdmin) {
+                alert('权限不足');
+                return;
+            }
+            const desc = document.getElementById('adminDesc').value;
+            fetch('/api/admin/description/' + pid, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({admin_key: adminKey, description: desc})
+            }).then(res => {
+                if(res.ok) {
+                    alert('描述已保存');
+                    location.reload();
+                } else {
+                    alert('保存失败，权限不足');
+                }
+            });
+        }
+        
+        // 管理员删除帖子
+        function deletePost() {
+            if (!isAdmin) {
+                alert('权限不足');
+                return;
+            }
+            if(!confirm('确定要删除此帖子吗？此操作不可恢复！')) return;
+            fetch('/api/admin/post/' + pid, {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({admin_key: adminKey})
+            }).then(res => {
+                if(res.ok) {
+                    alert('帖子已删除');
+                    location.href = '/';
+                } else {
+                    alert('删除失败，权限不足');
+                }
+            });
         }
         
         function handleLike() {
@@ -220,24 +285,22 @@
             }).then(() => location.reload());
         }
         
-        function deleteComment(commentId, commentUserId) {
-            const currentUserId = getUserId();
-            // Note: Client-side validation for better UX, but server enforces authorization
-            if (commentUserId !== currentUserId) {
-                alert('您只能删除自己的评论');
+        function deleteComment(commentId) {
+            if (!isAdmin) {
+                alert('只有管理员可以删除评论');
                 return;
             }
             
             if(!confirm('确定要删除这条评论吗？')) return;
-            fetch('/api/comment/'+commentId, {
+            fetch('/api/admin/comment/'+commentId, {
                 method:'DELETE',
                 headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({user_id: currentUserId})
+                body:JSON.stringify({admin_key: adminKey})
             }).then(res => {
                 if(res.ok) {
                     document.querySelector('[data-comment-id="'+commentId+'"]').remove();
                 } else {
-                    alert('删除失败：无权限或评论不存在');
+                    alert('删除失败：权限不足');
                 }
             });
         }
