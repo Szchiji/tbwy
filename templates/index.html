@@ -15,15 +15,7 @@
             background: linear-gradient(135deg, #1a2a3a 0%, #0d1a2a 100%);
             display: flex;
             align-items: center;
-            justify-content:  center;
-        }
-        .video-thumb-canvas {
-            position: absolute;
-            top:  0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit:  cover;
+            justify-content: center;
         }
         /* 公告滚动动画 - 从右向左 */
         .marquee {
@@ -45,69 +37,20 @@
             let userId = localStorage.getItem('user_id');
             if (!userId) {
                 userId = 'user_' + Math.random().toString(36).substring(2, 11);
-                localStorage. setItem('user_id', userId);
+                localStorage.setItem('user_id', userId);
             }
             return userId;
         }
         
-        // 从视频生成缩略图
-        function generateVideoThumbnail(container, videoSrc) {
-            var video = document.createElement('video');
-            video.crossOrigin = 'anonymous';
-            video.muted = true;
-            video.playsInline = true;
-            video.preload = 'metadata';
-            
-            video.onloadeddata = function() {
-                video.currentTime = 0. 5;
-            };
-            
-            video. onseeked = function() {
-                try {
-                    var canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth || 320;
-                    canvas.height = video. videoHeight || 180;
-                    var ctx = canvas.getContext('2d');
-                    ctx. drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    var img = document.createElement('img');
-                    img. src = canvas.toDataURL('image/jpeg', 0.8);
-                    img. className = 'video-thumb-canvas';
-                    img.alt = 'Video thumbnail';
-                    
-                    var placeholder = container.querySelector('.video-placeholder');
-                    if (placeholder) placeholder.style.display = 'none';
-                    container.insertBefore(img, container.firstChild);
-                } catch(e) {
-                    console.log('Cannot generate thumbnail:', e);
-                }
-            };
-            
-            video. onerror = function() {
-                console.log('Video load error');
-            };
-            
-            video.src = videoSrc;
-            video.load();
-        }
-        
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
-            if (! urlParams.has('user_id')) {
+            if (!urlParams.has('user_id')) {
                 urlParams.set('user_id', getUserId());
                 const newUrl = window.location.pathname + '?' + urlParams.toString();
                 if (window.location.search !== '?' + urlParams.toString()) {
                     window.history.replaceState({}, '', newUrl);
                 }
             }
-            
-            // 为所有视频生成缩略图
-            document.querySelectorAll('.video-container').forEach(function(container) {
-                var videoSrc = container.getAttribute('data-video-src');
-                if (videoSrc) {
-                    generateVideoThumbnail(container, videoSrc);
-                }
-            });
         };
     </script>
 </head>
@@ -153,20 +96,24 @@
                 <!-- 左侧媒体区域 -->
                 <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
                     {% set media = post.first_media or '' %}
-                    {% set is_video = media. endswith('.mp4') or media.endswith('. mov') or media.endswith('.MP4') or media.endswith('.MOV') %}
-                    {% set is_image = media.endswith('.jpg') or media.endswith('. jpeg') or media.endswith('.png') or media.endswith('.gif') or media.endswith('. webp') or media.endswith('. JPG') or media.endswith('.JPEG') or media.endswith('.PNG') %}
+                    {% set is_video = media.endswith('.mp4') or media.endswith('.mov') or media.endswith('.MP4') or media.endswith('.MOV') %}
+                    {% set is_image = media.endswith('.jpg') or media.endswith('.jpeg') or media.endswith('.png') or media.endswith('.gif') or media.endswith('.webp') or media.endswith('.JPG') or media.endswith('.JPEG') or media.endswith('.PNG') %}
                     
                     {% if media and is_video %}
-                    <!-- 视频容器 -->
-                    <div class="video-container w-full h-full relative" data-video-src="{{ media }}">
-                        <div class="video-placeholder w-full h-full absolute inset-0">
-                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                    <!-- 视频容器 - 使用服务器生成的缩略图 -->
+                    <div class="video-container w-full h-full relative">
+                        {% if post.thumbnail %}
+                        <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="Video thumbnail">
+                        {% else %}
+                        <div class="video-placeholder w-full h-full">
+                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Play video icon" role="img">
                                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                             </svg>
                         </div>
+                        {% endif %}
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                             <div class="bg-black/40 rounded-full p-2">
-                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20" aria-label="Play button" role="img">
                                     <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                                 </svg>
                             </div>
@@ -175,11 +122,11 @@
                     {% elif media and is_image %}
                     <!-- 图片 -->
                     <img src="{{ media }}" class="w-full h-full object-cover" 
-                         onerror="this. onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
+                         onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
                     {% elif media %}
                     <!-- 未知媒体类型，尝试作为图片加载 -->
                     <img src="{{ media }}" class="w-full h-full object-cover" 
-                         onerror="this.onerror=null; this. parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
+                         onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
                     {% else %}
                     <!-- 无媒体 -->
                     <div class="w-full h-full flex items-center justify-center bg-gray-800">
@@ -189,7 +136,7 @@
                 </div>
 
                 <!-- 右侧文字区域 -->
-                <div class="flex-1 p-4 flex flex-col justify-start min-w-0">
+                <div class="flex-1 p-4 flex flex-col items-start justify-start min-w-0">
                     <div class="text-blue-400 text-xs font-bold mb-2">{{ post.date }}</div>
                     <div class="text-gray-300 text-sm leading-relaxed line-clamp-4 whitespace-pre-wrap text-left break-words">
                         {{ post.text if post.text else '查看详情' }}
