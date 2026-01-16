@@ -1,41 +1,17 @@
-<! DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix Hub</title>
+    <title>我的收藏 - Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background:  #0a0a12; }
+        body { background: #0a0a12; }
         .card-bg { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); }
         .nav-bg { background: linear-gradient(90deg, #0f0f1a 0%, #1a1a2e 100%); }
         .navbar-bottom { background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%); }
-        .search-bg { background:  rgba(255,255,255,0.05); border:  1px solid rgba(255,255,255,0.1); }
-        .notice-bg { background:  linear-gradient(90deg, #1e3a5f 0%, #2d4a7c 100%); }
         .nav-item-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
         .nav-item { color: #9ca3af; border-top: 2px solid transparent; }
-        .card-bg:hover { transform: translateY(-2px); }
-        .card-bg { transition: all 0.3s ease; }
-        .video-placeholder {
-            background: linear-gradient(135deg, #1a2a3a 0%, #0d1a2a 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        /* 公告滚动动画 - 从右向左 */
-        .marquee {
-            width: 100%;
-            overflow: hidden;
-            white-space: nowrap;
-        }
-        .marquee-content {
-            display:  inline-block;
-            animation: marquee 20s linear infinite;
-        }
-        @keyframes marquee {
-            0% { transform: translateX(100%); }
-            100% { transform:  translateX(-100%); }
-        }
     </style>
     <script>
         function getUserId() {
@@ -51,10 +27,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             if (!urlParams.has('user_id')) {
                 urlParams.set('user_id', getUserId());
-                const newUrl = window.location.pathname + '?' + urlParams.toString();
-                if (window.location.search !== '?' + urlParams.toString()) {
-                    window.history.replaceState({}, '', newUrl);
-                }
+                window.location.search = urlParams.toString();
             }
         };
     </script>
@@ -63,36 +36,22 @@
     <!-- 导航栏 -->
     <nav class="nav-bg shadow-lg p-4 sticky top-0 z-50 border-b border-white/5">
         <div class="container mx-auto">
-            <a href="/" class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 italic tracking-wider">MATRIX HUB</a>
+            <a href="/?user_id={{ user_id }}" class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 italic tracking-wider">MATRIX HUB</a>
         </div>
     </nav>
 
-    <!-- 公告（滚动） -->
+    <!-- 公告 -->
     {% if notice %}
-    <div class="notice-bg text-white p-3 text-sm font-medium border-b border-white/10">
-        <div class="marquee">
-            <span class="marquee-content">{{ notice }}</span>
-        </div>
+    <div class="bg-gradient-to-r from-blue-900/30 to-purple-900/30 text-white p-3 text-sm font-medium border-b border-white/10">
+        <div class="container mx-auto">{{ notice }}</div>
     </div>
     {% endif %}
 
-    <!-- 搜索框 -->
-    <div class="container mx-auto px-4 py-4">
-        <form action="/" method="get">
-            <div class="search-bg rounded-xl px-4 py-3 flex items-center">
-                <input type="text" name="q" value="{{ q }}" placeholder="搜索情报..." 
-                       class="bg-transparent w-full text-gray-300 placeholder-gray-500 outline-none text-sm">
-                <button type="submit" class="text-gray-400 hover:text-white ml-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- 卡片列表 -->
-    <main class="container mx-auto px-4 pb-8">
+    <!-- 内容区域 -->
+    <main class="container mx-auto px-4 py-6">
+        <h1 class="text-2xl font-bold mb-6 text-blue-400">我的收藏</h1>
+        
+        {% if posts %}
         <div class="space-y-4">
             {% for post in posts %}
             <div class="card-bg rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition cursor-pointer flex border border-white/5" 
@@ -105,12 +64,12 @@
                     {% set is_image = media.endswith('.jpg') or media.endswith('.jpeg') or media.endswith('.png') or media.endswith('.gif') or media.endswith('.webp') or media.endswith('.JPG') or media.endswith('.JPEG') or media.endswith('.PNG') %}
                     
                     {% if media and is_video %}
-                    <!-- 视频容器 - 使用服务器生成的缩略图，不显示播放按钮 -->
+                    <!-- 视频缩略图 -->
                     <div class="video-container w-full h-full relative">
                         {% if post.thumbnail %}
                         <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="Video thumbnail">
                         {% else %}
-                        <div class="video-placeholder w-full h-full">
+                        <div class="w-full h-full flex items-center justify-center bg-gray-800">
                             <span class="text-gray-500 text-xs">视频</span>
                         </div>
                         {% endif %}
@@ -120,7 +79,7 @@
                     <img src="{{ media }}" class="w-full h-full object-cover" 
                          onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
                     {% elif media %}
-                    <!-- 未知媒体类型，尝试作为图片加载 -->
+                    <!-- 未知媒体类型 -->
                     <img src="{{ media }}" class="w-full h-full object-cover" 
                          onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center bg-gray-800 text-gray-500 text-xs\'>NO MEDIA</div>'">
                     {% else %}
@@ -142,32 +101,19 @@
                         {% if post.blacklist_count %}
                         <span>🚫 {{ post.blacklist_count }}</span>
                         {% endif %}
+                        <span class="text-yellow-400">⭐ 已收藏</span>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
-        
-        <!-- 分页导航 -->
-        {% if total_pages > 1 %}
-        <div class="flex justify-center items-center gap-2 mt-8">
-            {% if page > 1 %}
-            <a href="/?page={{ page - 1 }}&q={{ q }}&user_id={{ user_id }}" 
-               class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 rounded-lg text-blue-400 transition">
-                上一页
+        {% else %}
+        <div class="text-center py-20">
+            <div class="text-6xl mb-4">⭐</div>
+            <p class="text-gray-400 text-lg">还没有收藏任何内容</p>
+            <a href="/?user_id={{ user_id }}" class="inline-block mt-6 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium transition">
+                去首页看看
             </a>
-            {% endif %}
-            
-            <span class="px-4 py-2 text-gray-400">
-                第 {{ page }} / {{ total_pages }} 页
-            </span>
-            
-            {% if page < total_pages %}
-            <a href="/?page={{ page + 1 }}&q={{ q }}&user_id={{ user_id }}" 
-               class="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 rounded-lg text-blue-400 transition">
-                下一页
-            </a>
-            {% endif %}
         </div>
         {% endif %}
     </main>
@@ -175,11 +121,11 @@
     <!-- 底部导航栏 -->
     <nav class="navbar-bottom fixed bottom-0 left-0 right-0 border-t border-white/10 shadow-2xl">
         <div class="flex justify-around items-center h-16">
-            <a href="/?user_id={{ user_id }}" class="nav-item-active flex-1 flex flex-col items-center justify-center h-full transition">
-                <svg class="w-6 h-6 mb-1" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="/?user_id={{ user_id }}" class="nav-item flex-1 flex flex-col items-center justify-center h-full transition hover:bg-white/5">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                 </svg>
-                <span class="text-xs font-bold">首页</span>
+                <span class="text-xs">首页</span>
             </a>
             <a href="/?user_id={{ user_id }}" class="nav-item flex-1 flex flex-col items-center justify-center h-full transition hover:bg-white/5">
                 <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,11 +133,11 @@
                 </svg>
                 <span class="text-xs">搜索</span>
             </a>
-            <a href="/favorites?user_id={{ user_id }}" class="nav-item flex-1 flex flex-col items-center justify-center h-full transition hover:bg-white/5">
-                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="/favorites?user_id={{ user_id }}" class="nav-item-active flex-1 flex flex-col items-center justify-center h-full transition">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                 </svg>
-                <span class="text-xs">收藏</span>
+                <span class="text-xs font-bold">收藏</span>
             </a>
             <a href="/?user_id={{ user_id }}" class="nav-item flex-1 flex flex-col items-center justify-center h-full transition hover:bg-white/5">
                 <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

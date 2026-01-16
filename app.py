@@ -1,12 +1,47 @@
-import os, sqlite3, requests, telebot, datetime, mimetypes, cv2
+import os, sqlite3, requests, telebot, datetime, mimetypes, cv2, html
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+from collections import defaultdict
+import time
 
 # 环境与类型配置
 mimetypes.add_type('video/mp4', '.mp4')
 mimetypes.add_type('video/quicktime', '.mov')
 app = Flask(__name__)
+
+# 简单的内存速率限制器
+rate_limit_storage = defaultdict(lambda: {'count': 0, 'reset_time': time.time()})
+
+def check_rate_limit(identifier, max_requests=10, window_seconds=60):
+    """简单的速率限制检查
+    
+    注意：此实现使用共享的 defaultdict 且不是线程安全的。
+    在生产环境中，建议使用 Redis 或其他线程安全的存储方案。
+    
+    Args:
+        identifier: 用户标识符 (如 user_id 或 IP)
+        max_requests: 时间窗口内最大请求数
+        window_seconds: 时间窗口（秒）
+    
+    Returns:
+        bool: True 表示允许请求，False 表示超过限制
+    """
+    current_time = time.time()
+    limit_data = rate_limit_storage[identifier]
+    
+    # 如果时间窗口已过，重置计数
+    if current_time > limit_data['reset_time']:
+        limit_data['count'] = 0
+        limit_data['reset_time'] = current_time + window_seconds
+    
+    # 检查是否超过限制
+    if limit_data['count'] >= max_requests:
+        return False
+    
+    # 增加计数
+    limit_data['count'] += 1
+    return True
 
 # 路径配置 (适配 Railway Volume)
 DB_DIR = '/app/data' if os.path.exists('/app/data') else 'data'
@@ -48,12 +83,24 @@ def init_db():
             );
             CREATE TABLE IF NOT EXISTS blacklist (user_id INTEGER PRIMARY KEY, date TEXT);
             CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
-            CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT);
+            CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT, user_id TEXT);
             CREATE TABLE IF NOT EXISTS user_blacklist (user_id TEXT, post_id INTEGER, date TEXT, PRIMARY KEY (user_id, post_id));
+            CREATE TABLE IF NOT EXISTS user_favorites (
+                user_id TEXT, 
+                post_id INTEGER, 
+                date TEXT, 
+                PRIMARY KEY (user_id, post_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_posts_approved ON posts(is_approved);
+            CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date DESC);
+            CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+            CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(user_id);
             INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub');
         ''')
         
         # 字段自动迁移逻辑 (安全处理旧数据库)
+        # 注意：这是简单的迁移方案，适合小型项目
+        # 生产环境建议使用 Alembic 等专业的数据库迁移工具
         cursor = conn.execute("PRAGMA table_info(posts)")
         columns = [c[1] for c in cursor.fetchall()]
         if 'user_id' not in columns:
@@ -70,6 +117,13 @@ def init_db():
             except: pass
         if 'thumbnail' not in columns:
             try: conn.execute("ALTER TABLE posts ADD COLUMN thumbnail TEXT")
+            except: pass
+        
+        # 迁移 comments 表的 user_id 字段
+        cursor = conn.execute("PRAGMA table_info(comments)")
+        comment_columns = [c[1] for c in cursor.fetchall()]
+        if 'user_id' not in comment_columns:
+            try: conn.execute("ALTER TABLE comments ADD COLUMN user_id TEXT")
             except: pass
 
 init_db()
@@ -260,6 +314,10 @@ def webhook():
 def index():
     q = request.args.get('q', '')
     user_id = request.args.get('user_id', 'anonymous')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    offset = (page - 1) * per_page
+    
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
         # 分组查询：如果是媒体组只显示一张，排除用户拉黑的内容
@@ -267,12 +325,22 @@ def index():
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
                  GROUP BY COALESCE(p.media_group_id, p.id) 
-                 ORDER BY p.id DESC"""
-        posts = conn.execute(sql, (f'%{q}%', user_id)).fetchall()
-    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", q=q, user_id=user_id)
+                 ORDER BY p.id DESC
+                 LIMIT ? OFFSET ?"""
+        posts = conn.execute(sql, (f'%{q}%', user_id, per_page, offset)).fetchall()
+        
+        # 获取总数用于分页
+        count_sql = """SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) as total FROM posts p 
+                       WHERE p.is_approved=1 AND p.text LIKE ? 
+                       AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)"""
+        total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
+        
+    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", 
+                         q=q, user_id=user_id, page=page, total_pages=(total + per_page - 1) // per_page)
 
 @app.route('/post/<int:post_id>')
 def detail(post_id):
+    user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
         post = conn.execute("SELECT * FROM posts WHERE id=?", (post_id,)).fetchone()
         if not post: return "404", 404
@@ -285,18 +353,39 @@ def detail(post_id):
             all_media = [post['first_media']]
             
         comments = conn.execute("SELECT * FROM comments WHERE post_id=? ORDER BY id DESC", (post_id,)).fetchall()
-    return render_template('detail.html', post=post, all_media=all_media, comments=comments)
+        
+        # 检查是否已收藏
+        is_favorited = conn.execute("SELECT 1 FROM user_favorites WHERE user_id=? AND post_id=?", (user_id, post_id)).fetchone() is not None
+        
+    return render_template('detail.html', post=post, all_media=all_media, comments=comments, 
+                         is_favorited=is_favorited, user_id=user_id)
 
 @app.route('/api/like/<int:post_id>', methods=['POST'])
 def like(post_id):
-    with get_db() as conn: conn.execute("UPDATE posts SET likes=likes+1 WHERE id=?", (post_id,))
+    user_id = request.json.get('user_id', 'anonymous') if request.is_json else 'anonymous'
+    # Rate limiting: 10 likes per minute per user
+    if not check_rate_limit(f'like_{user_id}', max_requests=10, window_seconds=60):
+        return jsonify({"status":"error", "message":"操作过于频繁，请稍后再试"}), 429
+    
+    with get_db() as conn: 
+        conn.execute("UPDATE posts SET likes=likes+1 WHERE id=?", (post_id,))
     return jsonify({"status":"ok"})
 
 @app.route('/api/comment/<int:post_id>', methods=['POST'])
 def comment(post_id):
     content = request.json.get('content')
+    user_id = request.json.get('user_id', 'anonymous')
+    
+    # Rate limiting: 5 comments per minute per user
+    if not check_rate_limit(f'comment_{user_id}', max_requests=5, window_seconds=60):
+        return jsonify({"status":"error", "message":"评论过于频繁，请稍后再试"}), 429
+    
+    # XSS protection: escape HTML content
     if content:
-        with get_db() as conn: conn.execute("INSERT INTO comments (post_id, content, date) VALUES (?,?,?)", (post_id, content, datetime.now().strftime("%m-%d %H:%M")))
+        content = html.escape(content)
+        with get_db() as conn: 
+            conn.execute("INSERT INTO comments (post_id, content, date, user_id) VALUES (?,?,?,?)", 
+                        (post_id, content, datetime.now().strftime("%m-%d %H:%M"), user_id))
     return jsonify({"status":"ok"})
 
 @app.route('/api/blacklist/<int:post_id>', methods=['POST'])
@@ -312,11 +401,55 @@ def blacklist_user(post_id):
 
 @app.route('/api/comment/<int:comment_id>', methods=['DELETE'])
 def delete_comment(comment_id):
-    # 简单删除，不验证用户（因为评论没有存储 user_id）
-    # 实际生产环境应该验证用户权限
+    # 验证用户权限：只允许评论所有者删除
+    user_id = request.json.get('user_id', 'anonymous')
     with get_db() as conn:
-        conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
+        comment = conn.execute("SELECT user_id FROM comments WHERE id=?", (comment_id,)).fetchone()
+        if comment and comment['user_id'] == user_id:
+            conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
+            return jsonify({"status":"ok"})
+        else:
+            return jsonify({"status":"error", "message":"无权限删除此评论"}), 403
+
+@app.route('/api/favorite/<int:post_id>', methods=['POST', 'DELETE'])
+def toggle_favorite(post_id):
+    user_id = request.json.get('user_id', 'anonymous')
+    with get_db() as conn:
+        existing = conn.execute("SELECT 1 FROM user_favorites WHERE user_id=? AND post_id=?", (user_id, post_id)).fetchone()
+        if request.method == 'POST' and not existing:
+            conn.execute("INSERT INTO user_favorites (user_id, post_id, date) VALUES (?,?,?)", 
+                        (user_id, post_id, datetime.now().strftime("%Y-%m-%d")))
+            return jsonify({"status":"ok", "favorited":True})
+        elif request.method == 'DELETE' and existing:
+            conn.execute("DELETE FROM user_favorites WHERE user_id=? AND post_id=?", (user_id, post_id))
+            return jsonify({"status":"ok", "favorited":False})
     return jsonify({"status":"ok"})
+
+@app.route('/api/favorites')
+def get_favorites():
+    user_id = request.args.get('user_id', 'anonymous')
+    with get_db() as conn:
+        posts = conn.execute("""
+            SELECT p.* FROM posts p 
+            JOIN user_favorites f ON p.id = f.post_id 
+            WHERE f.user_id = ? ORDER BY f.date DESC
+        """, (user_id,)).fetchall()
+    return jsonify([dict(p) for p in posts])
+
+@app.route('/favorites')
+def favorites_page():
+    user_id = request.args.get('user_id', 'anonymous')
+    with get_db() as conn:
+        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+        # Get favorites with grouping similar to index
+        posts = conn.execute("""
+            SELECT p.* FROM posts p 
+            JOIN user_favorites f ON p.id = f.post_id 
+            WHERE f.user_id = ? 
+            GROUP BY COALESCE(p.media_group_id, p.id)
+            ORDER BY f.date DESC
+        """, (user_id,)).fetchall()
+    return render_template('favorites.html', posts=posts, notice=notice['value'] if notice else "", user_id=user_id)
 
 if __name__ == '__main__':
     # 自动设置 Webhook
