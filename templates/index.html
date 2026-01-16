@@ -106,14 +106,14 @@
                         <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="Video thumbnail">
                         {% else %}
                         <div class="video-placeholder w-full h-full">
-                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="w-12 h-12 text-gray-500" fill="currentColor" viewBox="0 0 20 20" aria-label="Play video icon" role="img">
                                 <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                             </svg>
                         </div>
                         {% endif %}
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                             <div class="bg-black/40 rounded-full p-2">
-                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-8 h-8 text-white/80" fill="currentColor" viewBox="0 0 20 20" aria-label="Play button" role="img">
                                     <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"/>
                                 </svg>
                             </div>

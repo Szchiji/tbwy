@@ -76,13 +76,31 @@ init_db()
 
 # --- 媒体处理 ---
 def generate_video_thumbnail(video_path, thumbnail_path):
-    """使用 cv2 生成视频缩略图"""
+    """使用 cv2 生成视频缩略图
+    
+    Args:
+        video_path: 视频文件路径
+        thumbnail_path: 缩略图保存路径
+        
+    Returns:
+        bool: 成功返回True，失败返回False
+    """
     try:
         cap = cv2.VideoCapture(video_path)
-        # 尝试定位到1秒位置
+        if not cap.isOpened():
+            print(f"Thumbnail generation error: Cannot open video file")
+            return False
+            
+        # 尝试定位到1秒位置，如果视频太短则使用第一帧
         cap.set(cv2.CAP_PROP_POS_MSEC, 1000)
         success, frame = cap.read()
-        if success:
+        
+        # 如果1秒位置读取失败，尝试读取第一帧
+        if not success:
+            cap.set(cv2.CAP_PROP_POS_MSEC, 0)
+            success, frame = cap.read()
+        
+        if success and frame is not None:
             # 调整大小到宽度320
             height, width = frame.shape[:2]
             new_width = 320
