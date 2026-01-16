@@ -3,16 +3,18 @@ from flask import Flask, request, render_template, jsonify, send_from_directory
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
 
-# 基础配置
+# 初始化配置
 mimetypes.add_type('video/mp4', '.mp4')
 mimetypes.add_type('video/quicktime', '.mov')
 app = Flask(__name__)
 
+# 路径设置
 DB_DIR = '/app/data'
 UPLOAD_DIR = os.path.join(DB_DIR, 'uploads')
 DB_PATH = os.path.join(DB_DIR, 'data.db')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# 环境变量
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 MY_CHAT_ID = os.environ.get("MY_CHAT_ID")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
@@ -36,7 +38,7 @@ def init_db():
         conn.execute('''CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT)''')
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub')")
         
-        # 字段强制对齐（防止旧数据库缺少字段）
+        # 自动修复/升级旧数据库字段
         cols = {"admin_note": "TEXT", "user_id": "INTEGER", "media_group_id": "TEXT", "first_media": "TEXT", "is_approved": "INTEGER DEFAULT 1"}
         for col, dtype in cols.items():
             try: conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {dtype}")
@@ -66,17 +68,17 @@ def serve_uploads(filename):
 def webhook():
     update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
     
-    # 1. 审核按钮回调
+    # 1. 审核按钮处理
     if update.callback_query:
         action, target = update.callback_query.data.split('_', 1)
         with get_db() as conn:
-            if action == 'y': # 通过
+            if action == 'y':
                 if target.startswith('G'): conn.execute("UPDATE posts SET is_approved=1 WHERE media_group_id=?", (target[1:],))
                 else: conn.execute("UPDATE posts SET is_approved=1 WHERE id=?", (target,))
-            else: # 拒绝
+            else:
                 if target.startswith('G'): conn.execute("DELETE FROM posts WHERE media_group_id=?", (target[1:],))
                 else: conn.execute("DELETE FROM posts WHERE id=?", (target,))
-        bot.edit_message_caption("【已处理】", MY_CHAT_ID, update.callback_query.message.message_id)
+        bot.edit_message_caption("【审核已处理】", MY_CHAT_ID, update.callback_query.message.message_id)
         return 'OK'
 
     p = update.channel_post or update.message or update.edited_channel_post or update.edited_message
@@ -86,15 +88,16 @@ def webhook():
     txt = p.text or p.caption or ""
     gid = p.media_group_id
 
-    # 2. 管理员专用指令
+    # 2. 管理员指令系统
     if str(uid) == str(MY_CHAT_ID):
         if txt.startswith('/notice '):
             with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
-            bot.send_message(MY_CHAT_ID, "✅ 网站公告已更新")
+            bot.send_message(MY_CHAT_ID, "✅ 网页公告更新成功")
             return 'OK'
         
         if txt == '/sync':
             history = bot.get_chat_history(CHANNEL_ID, limit=50)
+            # 解决多图组同步文字丢失：先提取所有组描述
             caps = {h.media_group_id: (h.text or h.caption) for h in history if h.media_group_id and (h.text or h.caption)}
             for h in history:
                 path = download_media(h)
@@ -102,7 +105,7 @@ def webhook():
                     conn.execute('''INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, is_approved) 
                                     VALUES (?,?,?,?,?,?,1)''', 
                                     (h.message_id, (h.text or h.caption) or caps.get(h.media_group_id, ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path))
-            bot.send_message(MY_CHAT_ID, "🔄 频道同步完成")
+            bot.send_message(MY_CHAT_ID, "🔄 频道历史记录补齐完成")
             return 'OK'
             
         if txt == '/ban' and p.reply_to_message:
@@ -110,7 +113,7 @@ def webhook():
                 res = conn.execute("SELECT user_id FROM posts WHERE msg_id=?", (p.reply_to_message.message_id,)).fetchone()
                 if res and res['user_id']:
                     conn.execute("INSERT OR IGNORE INTO blacklist (user_id, date) VALUES (?,?)", (res['user_id'], datetime.now().strftime("%Y-%m-%d")))
-                    bot.send_message(MY_CHAT_ID, f"🚫 已拉黑用户: {res['user_id']}")
+                    bot.send_message(MY_CHAT_ID, f"🚫 用户 {res['user_id']} 已被永久拉黑")
             return 'OK'
 
         if txt == '/del' and p.reply_to_message:
@@ -118,7 +121,7 @@ def webhook():
             with get_db() as conn: conn.execute("DELETE FROM posts WHERE msg_id=?", (mid,))
             try: bot.delete_message(CHANNEL_ID, mid)
             except: pass
-            bot.send_message(MY_CHAT_ID, "🗑️ 已物理删除")
+            bot.send_message(MY_CHAT_ID, "🗑️ 数据库与频道内容同步销毁")
             return 'OK'
 
     # 3. 黑名单拦截
@@ -126,7 +129,7 @@ def webhook():
         with get_db() as conn:
             if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return 'OK'
 
-    # 4. 入库与编辑同步
+    # 4. 内容入库与编辑同步
     path = download_media(p)
     if (update.edited_channel_post or update.edited_message):
         with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=? WHERE msg_id=?", (txt, path, p.message_id))
@@ -139,7 +142,7 @@ def webhook():
                        (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, 1 if update.channel_post else 0, uid))
         new_id = cursor.lastrowid
 
-    # 5. 投稿聚合审核
+    # 5. 投稿聚合审核逻辑
     if not update.channel_post and not txt.startswith('/'):
         is_first = True
         if gid:
@@ -155,6 +158,7 @@ def index():
     q = request.args.get('q', '')
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+        # 核心 SQL：按图组聚合，且按 ID 倒序
         posts = conn.execute('''SELECT * FROM posts WHERE is_approved=1 AND text LIKE ? 
                                 GROUP BY CASE WHEN media_group_id IS NOT NULL THEN media_group_id ELSE id END 
                                 ORDER BY id DESC''', (f'%{q}%',)).fetchall()
@@ -165,6 +169,7 @@ def detail(post_id):
     with get_db() as conn:
         post = conn.execute("SELECT * FROM posts WHERE id=?", (post_id,)).fetchone()
         if not post: return "404", 404
+        # 多图组详情页获取该组所有媒体
         all_media = conn.execute("SELECT first_media FROM posts WHERE media_group_id=? AND is_approved=1 ORDER BY msg_id ASC", (post['media_group_id'],)).fetchall() if post['media_group_id'] else [{'first_media': post['first_media']}]
         comments = conn.execute("SELECT * FROM comments WHERE post_id=? ORDER BY id DESC", (post_id,)).fetchall()
     return render_template('detail.html', post=post, all_media=all_media, comments=comments)
