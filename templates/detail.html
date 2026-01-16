@@ -77,10 +77,22 @@
         function getUserId() {
             let userId = localStorage.getItem('user_id');
             if (!userId) {
-                userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                userId = 'user_' + Math.random().toString(36).substring(2, 11);
                 localStorage.setItem('user_id', userId);
             }
             return userId;
+        }
+        
+        // 获取拉黑列表
+        function getBlacklistedItems() {
+            return JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
+        }
+        
+        // 添加到拉黑列表
+        function addToBlacklist(itemId) {
+            let blacklisted = getBlacklistedItems();
+            blacklisted.push(itemId);
+            localStorage.setItem('m_blacklisted', JSON.stringify(blacklisted));
         }
         
         function handleLike() {
@@ -99,7 +111,7 @@
         }
 
         function handleBlacklist() {
-            let blacklisted = JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
+            let blacklisted = getBlacklistedItems();
             if(blacklisted.includes(pid)) return alert('您已经拉黑过此内容！');
             if(!confirm('确定要拉黑此内容吗？拉黑后将不再显示。')) return;
             
@@ -109,8 +121,7 @@
                 body:JSON.stringify({user_id: getUserId()})
             }).then(res => {
                 if(res.ok) {
-                    blacklisted.push(pid);
-                    localStorage.setItem('m_blacklisted', JSON.stringify(blacklisted));
+                    addToBlacklist(pid);
                     const txt = document.getElementById('blacklistTxt');
                     const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
                     txt.innerText = '🚫 ' + num + ' 拉黑';
@@ -134,7 +145,7 @@
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
             if(liked.includes(pid)) document.getElementById('likeBtn').style.opacity = '0.5';
             
-            let blacklisted = JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
+            let blacklisted = getBlacklistedItems();
             if(blacklisted.includes(pid)) document.getElementById('blacklistBtn').style.opacity = '0.5';
         };
     </script>
