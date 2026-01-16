@@ -132,12 +132,13 @@ def download_media(p):
         if ext == ".mp4":
             thumb_name = f"{media_obj.file_id}_thumb.jpg"
             thumb_path = os.path.join(UPLOAD_DIR, thumb_name)
-            # 如果缩略图不存在，尝试生成
-            if not os.path.exists(thumb_path):
-                generate_video_thumbnail(target_path, thumb_path)
-            # 如果缩略图存在（可能是刚生成的或之前就有的），设置路径
             if os.path.exists(thumb_path):
+                # 缩略图已存在
                 thumbnail_path = f"/uploads/{thumb_name}"
+            else:
+                # 尝试生成缩略图
+                if generate_video_thumbnail(target_path, thumb_path):
+                    thumbnail_path = f"/uploads/{thumb_name}"
         return f"/uploads/{save_name}", thumbnail_path
         
     try:
