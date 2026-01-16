@@ -1,229 +1,216 @@
-import os
-import sqlite3
-import datetime
-import requests
-import cv2
-from flask import Flask, render_template, request, send_from_directory, jsonify
-import telebot
-from telebot import types
+import os, sqlite3, requests, telebot, datetime, mimetypes
+from flask import Flask, request, render_template, jsonify, send_from_directory
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from datetime import datetime
 
-# --- 核心配置 ---
-TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-CHANNEL_ID = os.getenv("CHANNEL_ID", "") 
-MY_CHAT_ID = os.getenv("MY_CHAT_ID", "")   
-BASE_URL = os.getenv("BASE_URL", "").rstrip('/') 
-
+# 环境与类型配置
+mimetypes.add_type('video/mp4', '.mp4')
+mimetypes.add_type('video/quicktime', '.mov')
 app = Flask(__name__)
-bot = telebot.TeleBot(TOKEN, threaded=False)
 
-# 路径设置 (Volume 挂载点)
-DATA_DIR = "/app/data" if os.path.exists("/app/data") else "data"
-UPLOAD_FOLDER = os.path.join(DATA_DIR, "uploads")
-DB_PATH = os.path.join(DATA_DIR, "data.db")
+# 路径配置 (适配 Railway Volume)
+DB_DIR = '/app/data' if os.path.exists('/app/data') else 'data'
+UPLOAD_DIR = os.path.join(DB_DIR, 'uploads')
+DB_PATH = os.path.join(DB_DIR, 'data.db')
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+MY_CHAT_ID = os.environ.get("MY_CHAT_ID")
+CHANNEL_ID = os.environ.get("CHANNEL_ID")
+# 获取公网 URL 用于 Webhook (可选)
+BASE_URL = os.environ.get("BASE_URL", "").rstrip('/')
 
+bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
+
+# --- 数据库管理 ---
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    """ 
-    初始化数据库并处理自动迁移。
-    修复 SQLite 无法在 ALTER TABLE 中使用 CURRENT_TIMESTAMP 的问题。
-    """
-    conn = get_db()
-    # 1. 创建基础表（如果不存在）
-    conn.execute('''CREATE TABLE IF NOT EXISTS posts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        tg_msg_id INTEGER,
-        media_group_id TEXT,
-        content TEXT,
-        file_path TEXT,
-        file_type TEXT,
-        thumb_url TEXT,
-        is_approved INTEGER DEFAULT 1,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-    
-    # 2. 检查现有列
-    cursor = conn.execute("PRAGMA table_info(posts)")
-    existing_columns = [column[1] for column in cursor.fetchall()]
-    
-    # 定义需要补全的列
-    # 注意：对于 created_at，由于 SQLite 限制，ALTER TABLE 时不能用 CURRENT_TIMESTAMP
-    # 我们先添加一个允许为空的列，后续查询时再处理
-    migrations = [
-        ('is_approved', "INTEGER DEFAULT 1"),
-        ('media_group_id', "TEXT"),
-        ('thumb_url', "TEXT"),
-        ('tg_msg_id', "INTEGER"),
-        ('created_at', "TIMESTAMP") # 不带 DEFAULT CURRENT_TIMESTAMP 以绕过限制
-    ]
-    
-    for col, definition in migrations:
-        if col not in existing_columns:
-            print(f"正在迁移数据库列: {col}")
-            try:
-                conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {definition}")
-                # 如果是新加的 created_at，手动刷一下当前时间
-                if col == 'created_at':
-                    conn.execute("UPDATE posts SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
-            except Exception as e:
-                print(f"列 {col} 迁移失败: {e}")
+    with get_db() as conn:
+        # 创建核心表
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                msg_id INTEGER UNIQUE, 
+                text TEXT, 
+                title TEXT, 
+                date TEXT, 
+                likes INTEGER DEFAULT 0, 
+                media_group_id TEXT, 
+                first_media TEXT, 
+                is_approved INTEGER DEFAULT 1, 
+                user_id INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS blacklist (user_id INTEGER PRIMARY KEY, date TEXT);
+            CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER, content TEXT, date TEXT);
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub');
+        ''')
         
-    conn.commit()
-    conn.close()
+        # 字段自动迁移逻辑 (安全处理旧数据库)
+        cursor = conn.execute("PRAGMA table_info(posts)")
+        columns = [c[1] for c in cursor.fetchall()]
+        if 'user_id' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN user_id INTEGER")
+            except: pass
+        if 'is_approved' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN is_approved INTEGER DEFAULT 1")
+            except: pass
 
-# 启动执行
 init_db()
 
-# --- 辅助工具 ---
-
-def generate_thumb(video_path):
-    """ 生成视频缩略图 """
-    thumb_name = "thumb_" + os.path.basename(video_path).rsplit('.', 1)[0] + ".jpg"
-    thumb_path = os.path.join(UPLOAD_FOLDER, thumb_name)
-    if os.path.exists(thumb_path):
-        return thumb_name
+# --- 媒体处理 ---
+def download_media(p):
+    media_obj = p.photo[-1] if p.photo else (p.video if p.video else None)
+    if not media_obj: return None
     
+    # 获取后缀
+    ext = ".jpg" if p.photo else ".mp4"
+    save_name = f"{media_obj.file_id}{ext}"
+    target_path = os.path.join(UPLOAD_DIR, save_name)
+    
+    if os.path.exists(target_path): 
+        return f"/uploads/{save_name}"
+        
     try:
-        cap = cv2.VideoCapture(video_path)
-        success, frame = cap.read()
-        if success:
-            cv2.imwrite(thumb_path, frame)
-            cap.release()
-            return thumb_name
+        file_info = bot.get_file(media_obj.file_id)
+        file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+        with requests.get(file_url, stream=True, timeout=30) as r:
+            if r.status_code == 200:
+                with open(target_path, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192): f.write(chunk)
+                return f"/uploads/{save_name}"
     except Exception as e:
-        print(f"Thumbnail error: {e}")
+        print(f"Download Error: {e}")
     return None
 
-def download_tg_file(file_id, custom_name=None):
-    """ 下载 Telegram 文件 """
-    try:
-        file_info = bot.get_file(file_id)
-        ext = file_info.file_path.split('.')[-1]
-        filename = custom_name if custom_name else f"{file_id}.{ext}"
-        local_path = os.path.join(UPLOAD_FOLDER, filename)
-        
-        if not os.path.exists(local_path):
-            downloaded_file = bot.download_file(file_info.file_path)
-            with open(local_path, 'wb') as f:
-                f.write(downloaded_file)
-        return filename
-    except Exception as e:
-        print(f"Download error: {e}")
-        return None
+@app.route('/uploads/<path:filename>')
+def serve_uploads(filename):
+    return send_from_directory(UPLOAD_DIR, filename)
 
-# --- Bot 交互逻辑 ---
-
-@bot.message_handler(commands=['sync'])
-def sync_history(message):
-    if str(message.chat.id) != str(MY_CHAT_ID): return
-    
-    bot.reply_to(message, "🔄 正在同步频道历史记录...")
-    try:
-        history = bot.get_chat_history(CHANNEL_ID, limit=50)
-        conn = get_db()
-        for msg in history:
-            exists = conn.execute("SELECT id FROM posts WHERE tg_msg_id = ?", (msg.message_id,)).fetchone()
-            if exists: continue
-            
-            content = msg.caption or msg.text or ""
-            file_id, file_type = None, None
-            if msg.photo:
-                file_id, file_type = msg.photo[-1].file_id, "image"
-            elif msg.video:
-                file_id, file_type = msg.video.file_id, "video"
-                
-            if file_id:
-                fname = download_tg_file(file_id)
-                thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
-                # 显式插入当前时间以防万一
-                conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved, created_at) VALUES (?,?,?,?,?,?, CURRENT_TIMESTAMP)",
-                             (msg.message_id, content, fname, file_type, thumb, 1))
-        conn.commit()
-        conn.close()
-        bot.reply_to(message, "✅ 同步完成！")
-    except Exception as e:
-        bot.reply_to(message, f"❌ 同步失败: {e}")
-
-@bot.message_handler(content_types=['photo', 'video'])
-def handle_submission(message):
-    is_admin = str(message.chat.id) == str(MY_CHAT_ID)
-    file_id = message.photo[-1].file_id if message.photo else message.video.file_id
-    file_type = "image" if message.photo else "video"
-    caption = message.caption or ""
-    
-    fname = download_tg_file(file_id)
-    thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
-    
-    conn = get_db()
-    approved = 1 if is_admin else 0
-    # 显式插入时间
-    cursor = conn.execute("INSERT INTO posts (content, file_path, file_type, thumb_url, is_approved, created_at) VALUES (?,?,?,?,?, CURRENT_TIMESTAMP)",
-                         (caption, fname, file_type, thumb, approved))
-    post_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    
-    if not is_admin:
-        bot.reply_to(message, "📩 投稿已进入审核队列。")
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("✅ 通过", callback_data=f"approve_{post_id}"),
-                   types.InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_{post_id}"))
-        
-        if file_type == "image":
-            bot.send_photo(MY_CHAT_ID, file_id, caption=f"新投稿：\n{caption}", reply_markup=markup)
-        else:
-            bot.send_video(MY_CHAT_ID, file_id, caption=f"新投稿：\n{caption}", reply_markup=markup)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith(('approve_', 'reject_')))
-def admin_action(call):
-    action, post_id = call.data.split('_')
-    conn = get_db()
-    if action == "approve":
-        conn.execute("UPDATE posts SET is_approved = 1 WHERE id = ?", (post_id,))
-        bot.answer_callback_query(call.id, "已发布")
-        bot.edit_message_caption(f"{call.message.caption}\n\n[状态: 已批准 ✅]", call.message.chat.id, call.message.message_id)
-    else:
-        conn.execute("DELETE FROM posts WHERE id = ?", (post_id,))
-        bot.answer_callback_query(call.id, "已拒绝")
-        bot.edit_message_caption(f"{call.message.caption}\n\n[状态: 已拒绝 ❌]", call.message.chat.id, call.message.message_id)
-    conn.commit()
-    conn.close()
-
-# --- 路由 ---
-
-@app.route('/')
-def index():
-    try:
-        conn = get_db()
-        # 使用 COALESCE 处理那些 created_at 可能为 NULL 的旧数据
-        query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY COALESCE(created_at, '2000-01-01') DESC"
-        posts = conn.execute(query).fetchall()
-        conn.close()
-        return render_template('index.html', posts=posts)
-    except Exception as e:
-        print(f"Index error: {e}")
-        return "数据库更新中，请刷新页面...", 503
-
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
-
+# --- Webhook 逻辑 ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
     if request.headers.get('content-type') == 'application/json':
         json_string = request.get_data().decode('utf-8')
-        update = types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return ''
-    return jsonify({"status": "forbidden"}), 403
+        update = telebot.types.Update.de_json(json_string)
+        
+        # 1. 审核回调
+        if update.callback_query:
+            try:
+                action, target = update.callback_query.data.split('_', 1)
+                with get_db() as conn:
+                    if action == 'y':
+                        sql = "UPDATE posts SET is_approved=1 WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
+                        conn.execute(sql, (target[1:] if target.startswith('G') else target,))
+                        bot.answer_callback_query(update.callback_query.id, "审核通过")
+                    else:
+                        sql = "DELETE FROM posts WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
+                        conn.execute(sql, (target[1:] if target.startswith('G') else target,))
+                        bot.answer_callback_query(update.callback_query.id, "已拒绝并删除")
+                bot.edit_message_caption("【审核操作已完成】", MY_CHAT_ID, update.callback_query.message.message_id)
+            except: pass
+            return 'OK'
+
+        p = update.channel_post or update.message or update.edited_channel_post or update.edited_message
+        if not p: return 'OK'
+        
+        uid = p.from_user.id if p.from_user else None
+        txt = p.text or p.caption or ""
+        gid = p.media_group_id
+
+        # 2. 管理员指令
+        if str(uid) == str(MY_CHAT_ID) or str(p.chat.id) == str(MY_CHAT_ID):
+            if txt.startswith('/notice '):
+                with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
+                bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
+                return 'OK'
+            
+            if txt == '/sync':
+                bot.send_message(MY_CHAT_ID, "🔄 正在同步频道...")
+                history = bot.get_chat_history(CHANNEL_ID, limit=50)
+                for h in history:
+                    path = download_media(h)
+                    if path:
+                        with get_db() as conn:
+                            conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, is_approved) VALUES (?,?,?,?,?,?,1)",
+                                         (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path))
+                bot.send_message(MY_CHAT_ID, "✅ 同步完成")
+                return 'OK'
+
+        # 3. 黑名单拦截
+        if uid:
+            with get_db() as conn:
+                if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return 'OK'
+
+        # 4. 入库处理
+        path = download_media(p)
+        if path:
+            if (update.edited_channel_post or update.edited_message):
+                with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=? WHERE msg_id=?", (txt, path, p.message_id))
+            else:
+                with get_db() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, is_approved, user_id) VALUES (?,?,?,?,?,?,?,?)",
+                                   (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, 1 if update.channel_post else 0, uid))
+                    new_id = cursor.lastrowid
+                
+                # 5. 投稿审核提醒
+                if not update.channel_post and str(uid) != str(MY_CHAT_ID):
+                    markup = InlineKeyboardMarkup().row(
+                        InlineKeyboardButton("✅通过", callback_query_data=f"y_{'G'+gid if gid else new_id}"),
+                        InlineKeyboardButton("❌拒绝", callback_data=f"n_{'G'+gid if gid else new_id}")
+                    )
+                    bot.send_message(MY_CHAT_ID, f"🔔 新投稿:\n{txt[:100]}", reply_markup=markup)
+        
+        return 'OK'
+    return 'OK'
+
+# --- 路由渲染 ---
+@app.route('/')
+def index():
+    q = request.args.get('q', '')
+    with get_db() as conn:
+        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+        # 分组查询：如果是媒体组只显示一张
+        sql = "SELECT * FROM posts WHERE is_approved=1 AND text LIKE ? GROUP BY COALESCE(media_group_id, id) ORDER BY id DESC"
+        posts = conn.execute(sql, (f'%{q}%',)).fetchall()
+    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", q=q)
+
+@app.route('/post/<int:post_id>')
+def detail(post_id):
+    with get_db() as conn:
+        post = conn.execute("SELECT * FROM posts WHERE id=?", (post_id,)).fetchone()
+        if not post: return "404", 404
+        # 获取相册所有媒体
+        all_media = []
+        if post['media_group_id']:
+            rows = conn.execute("SELECT first_media FROM posts WHERE media_group_id=? AND is_approved=1 ORDER BY id ASC", (post['media_group_id'],)).fetchall()
+            all_media = [r['first_media'] for r in rows]
+        else:
+            all_media = [post['first_media']]
+            
+        comments = conn.execute("SELECT * FROM comments WHERE post_id=? ORDER BY id DESC", (post_id,)).fetchall()
+    return render_template('detail.html', post=post, all_media=all_media, comments=comments)
+
+@app.route('/api/like/<int:post_id>', methods=['POST'])
+def like(post_id):
+    with get_db() as conn: conn.execute("UPDATE posts SET likes=likes+1 WHERE id=?", (post_id,))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/comment/<int:post_id>', methods=['POST'])
+def comment(post_id):
+    content = request.json.get('content')
+    if content:
+        with get_db() as conn: conn.execute("INSERT INTO comments (post_id, content, date) VALUES (?,?,?)", (post_id, content, datetime.now().strftime("%m-%d %H:%M")))
+    return jsonify({"status":"ok"})
 
 if __name__ == '__main__':
-    if BASE_URL:
+    # 自动设置 Webhook
+    if BASE_URL and BOT_TOKEN:
         bot.remove_webhook()
         bot.set_webhook(url=f"{BASE_URL}/webhook")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
