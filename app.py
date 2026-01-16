@@ -9,9 +9,9 @@ from telebot import types
 
 # --- 核心配置 ---
 TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-CHANNEL_ID = os.getenv("CHANNEL_ID", "")  # 格式如 @mychannel
-MY_CHAT_ID = os.getenv("MY_CHAT_ID", "")   # 管理员的 Telegram ID
-BASE_URL = os.getenv("BASE_URL", "").rstrip('/') # 网站公网 URL
+CHANNEL_ID = os.getenv("CHANNEL_ID", "") 
+MY_CHAT_ID = os.getenv("MY_CHAT_ID", "")   
+BASE_URL = os.getenv("BASE_URL", "").rstrip('/') 
 
 app = Flask(__name__)
 bot = telebot.TeleBot(TOKEN, threaded=False)
@@ -29,8 +29,12 @@ def get_db():
     return conn
 
 def init_db():
-    """ 初始化数据库并处理自动迁移 """
+    """ 
+    初始化数据库并处理自动迁移。
+    如果缺少某些列，程序会自动尝试 ALTER TABLE 补齐。
+    """
     conn = get_db()
+    # 1. 创建基础表（如果不存在）
     conn.execute('''CREATE TABLE IF NOT EXISTS posts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         tg_msg_id INTEGER,
@@ -43,17 +47,31 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
     
-    # 检查缺失列
+    # 2. 动态检查并补齐缺失的列
     cursor = conn.execute("PRAGMA table_info(posts)")
-    columns = [column[1] for column in cursor.fetchall()]
-    if 'is_approved' not in columns:
-        conn.execute("ALTER TABLE posts ADD COLUMN is_approved INTEGER DEFAULT 1")
-    if 'media_group_id' not in columns:
-        conn.execute("ALTER TABLE posts ADD COLUMN media_group_id TEXT")
+    existing_columns = [column[1] for column in cursor.fetchall()]
+    
+    # 需要检查的所有新列及其默认值定义
+    required_columns = {
+        'is_approved': "INTEGER DEFAULT 1",
+        'media_group_id': "TEXT",
+        'thumb_url': "TEXT",
+        'created_at': "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        'tg_msg_id': "INTEGER"
+    }
+    
+    for col, definition in required_columns.items():
+        if col not in existing_columns:
+            print(f"Migrating database: Adding column {col}")
+            try:
+                conn.execute(f"ALTER TABLE posts ADD COLUMN {col} {definition}")
+            except Exception as e:
+                print(f"Migration error on {col}: {e}")
         
     conn.commit()
     conn.close()
 
+# 执行数据库初始化
 init_db()
 
 # --- 辅助工具 ---
@@ -101,30 +119,33 @@ def sync_history(message):
     if str(message.chat.id) != str(MY_CHAT_ID): return
     
     bot.reply_to(message, "🔄 正在从频道同步最近 50 条消息...")
-    history = bot.get_chat_history(CHANNEL_ID, limit=50)
-    conn = get_db()
-    
-    for msg in history:
-        exists = conn.execute("SELECT id FROM posts WHERE tg_msg_id = ?", (msg.message_id,)).fetchone()
-        if exists: continue
+    try:
+        history = bot.get_chat_history(CHANNEL_ID, limit=50)
+        conn = get_db()
         
-        content = msg.caption or msg.text or ""
-        file_id, file_type = None, None
-        
-        if msg.photo:
-            file_id, file_type = msg.photo[-1].file_id, "image"
-        elif msg.video:
-            file_id, file_type = msg.video.file_id, "video"
+        for msg in history:
+            exists = conn.execute("SELECT id FROM posts WHERE tg_msg_id = ?", (msg.message_id,)).fetchone()
+            if exists: continue
             
-        if file_id:
-            fname = download_tg_file(file_id)
-            thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
-            conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?,?)",
-                         (msg.message_id, content, fname, file_type, thumb, 1))
-    
-    conn.commit()
-    conn.close()
-    bot.reply_to(message, "✅ 同步完成！")
+            content = msg.caption or msg.text or ""
+            file_id, file_type = None, None
+            
+            if msg.photo:
+                file_id, file_type = msg.photo[-1].file_id, "image"
+            elif msg.video:
+                file_id, file_type = msg.video.file_id, "video"
+                
+            if file_id:
+                fname = download_tg_file(file_id)
+                thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
+                conn.execute("INSERT INTO posts (tg_msg_id, content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?,?)",
+                             (msg.message_id, content, fname, file_type, thumb, 1))
+        
+        conn.commit()
+        conn.close()
+        bot.reply_to(message, "✅ 同步完成！")
+    except Exception as e:
+        bot.reply_to(message, f"❌ 同步失败: {e}")
 
 @bot.message_handler(content_types=['photo', 'video'])
 def handle_submission(message):
@@ -138,7 +159,7 @@ def handle_submission(message):
     thumb = generate_thumb(os.path.join(UPLOAD_FOLDER, fname)) if file_type == "video" else None
     
     conn = get_db()
-    approved = 1 if is_admin else 0 # 管理员发的直接通过
+    approved = 1 if is_admin else 0
     cursor = conn.execute("INSERT INTO posts (content, file_path, file_type, thumb_url, is_approved) VALUES (?,?,?,?,?)",
                          (caption, fname, file_type, thumb, approved))
     post_id = cursor.lastrowid
@@ -151,10 +172,13 @@ def handle_submission(message):
         markup.add(types.InlineKeyboardButton("✅ 通过", callback_data=f"approve_{post_id}"),
                    types.InlineKeyboardButton("❌ 拒绝", callback_data=f"reject_{post_id}"))
         
-        if file_type == "image":
-            bot.send_photo(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
-        else:
-            bot.send_video(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
+        try:
+            if file_type == "image":
+                bot.send_photo(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
+            else:
+                bot.send_video(MY_CHAT_ID, file_id, caption=f"新投稿审核：\n{caption}", reply_markup=markup)
+        except Exception as e:
+            print(f"Error sending admin notification: {e}")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(('approve_', 'reject_')))
 def admin_action(call):
@@ -175,11 +199,16 @@ def admin_action(call):
 
 @app.route('/')
 def index():
-    conn = get_db()
-    query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY created_at DESC"
-    posts = conn.execute(query).fetchall()
-    conn.close()
-    return render_template('index.html', posts=posts)
+    try:
+        conn = get_db()
+        query = "SELECT * FROM posts WHERE is_approved = 1 ORDER BY created_at DESC"
+        posts = conn.execute(query).fetchall()
+        conn.close()
+        return render_template('index.html', posts=posts)
+    except sqlite3.OperationalError as e:
+        # 如果还是报错，说明列没补全，强制重试初始化
+        init_db()
+        return "数据库结构正在升级，请刷新页面...", 503
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
