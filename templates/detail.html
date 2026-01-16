@@ -22,10 +22,10 @@
         <div class="space-y-4 mb-8">
             {% for m in all_media %}
                 <div class="rounded-[2.5rem] overflow-hidden border border-white/5 bg-black shadow-2xl">
-                    {% if m.first_media.lower().endswith('.mp4') %}
-                        <video src="{{ m.first_media }}" controls playsinline class="w-full block"></video>
+                    {% if m.lower().endswith('.mp4') %}
+                        <video src="{{ m }}" controls playsinline class="w-full block"></video>
                     {% else %}
-                        <img src="{{ m.first_media }}" class="w-full block shadow-inner">
+                        <img src="{{ m }}" class="w-full block shadow-inner">
                     {% endif %}
                 </div>
             {% endfor %}
