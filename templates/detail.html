@@ -170,6 +170,8 @@
     <script>
         const pid = "{{ post.id }}";
         let isFavorited = {{ 'true' if is_favorited else 'false' }};
+        // Note: Admin key is exposed here by design - admin accesses via URL parameter ?admin_key=<key>
+        // This is a simple authentication mechanism. For production, consider using session-based auth.
         const adminKey = "{{ request.args.get('admin_key', '') }}";
         const isAdmin = {{ 'true' if is_admin else 'false' }};
         

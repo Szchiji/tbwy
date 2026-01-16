@@ -60,7 +60,7 @@
                 {% for comment in comments %}
                 <a href="/post/{{ comment.post_id }}?user_id={{ user_id }}" class="glass-panel p-4 rounded-xl block hover:bg-white/5 transition">
                     <div class="text-sm text-gray-300 mb-2">{{ comment.content }}</div>
-                    <div class="text-xs text-gray-500">在帖子: {{ comment.post_text[:30] if comment.post_text else '查看详情' }}...</div>
+                    <div class="text-xs text-gray-500">在帖子: {{ (comment.post_text[:50] + '...') if comment.post_text and comment.post_text|length > 50 else (comment.post_text or '查看详情') }}</div>
                     <div class="text-xs text-gray-500 mt-1">{{ comment.date }}</div>
                 </a>
                 {% endfor %}

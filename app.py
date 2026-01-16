@@ -54,8 +54,10 @@ MY_CHAT_ID = os.environ.get("MY_CHAT_ID")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 # 获取公网 URL 用于 Webhook (可选)
 BASE_URL = os.environ.get("BASE_URL", "").rstrip('/')
-# 管理员密钥
+# 管理员密钥（生产环境务必设置强密码）
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "matrix_admin_2024")
+if ADMIN_KEY == "matrix_admin_2024":
+    print("WARNING: Using default ADMIN_KEY. Please set ADMIN_KEY environment variable for production!")
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
@@ -481,8 +483,10 @@ def delete_post(post_id):
     if admin_key != ADMIN_KEY:
         return jsonify({"status":"error", "message":"权限不足"}), 403
     with get_db() as conn:
-        # 删除帖子及相关评论
+        # 删除帖子及相关数据（评论、收藏、拉黑记录）
         conn.execute("DELETE FROM comments WHERE post_id=?", (post_id,))
+        conn.execute("DELETE FROM user_favorites WHERE post_id=?", (post_id,))
+        conn.execute("DELETE FROM user_blacklist WHERE post_id=?", (post_id,))
         conn.execute("DELETE FROM posts WHERE id=?", (post_id,))
     return jsonify({"status":"ok"})
 
