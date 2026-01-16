@@ -49,6 +49,8 @@
         
         window.onload = function() {
             const urlParams = new URLSearchParams(window.location.search);
+            const adminKey = urlParams.get('admin_key') || '';
+            
             if (!urlParams.has('user_id')) {
                 urlParams.set('user_id', getUserId());
                 const newUrl = window.location.pathname + '?' + urlParams.toString();
@@ -56,6 +58,18 @@
                     window.history.replaceState({}, '', newUrl);
                 }
             }
+            
+            // 为所有卡片添加点击事件，传递 admin_key
+            document.querySelectorAll('.card-bg[data-post-id]').forEach(card => {
+                card.onclick = function() {
+                    const postId = this.dataset.postId;
+                    let url = '/post/' + encodeURIComponent(postId) + '?user_id=' + encodeURIComponent(getUserId());
+                    if (adminKey) {
+                        url += '&admin_key=' + encodeURIComponent(adminKey);
+                    }
+                    location.href = url;
+                };
+            });
         };
     </script>
 </head>
@@ -96,7 +110,7 @@
         <div class="space-y-4">
             {% for post in posts %}
             <div class="card-bg rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition cursor-pointer flex border border-white/5" 
-                 onclick="location.href='/post/{{ post.id }}?user_id={{ user_id }}'">
+                 data-post-id="{{ post.id }}">
                 
                 <!-- 左侧媒体区域 -->
                 <div class="relative w-36 h-36 flex-shrink-0 bg-gray-900">
@@ -138,10 +152,8 @@
                         {{ post.text if post.text else '查看详情' }}
                     </div>
                     <div class="flex items-center gap-3 mt-auto pt-2 text-xs text-gray-500">
-                        <span class="text-pink-400">❤️ {{ post.likes }}</span>
-                        {% if post.blacklist_count %}
-                        <span>🚫 {{ post.blacklist_count }}</span>
-                        {% endif %}
+                        <span class="text-pink-400">❤️ {{ post.likes or 0 }}</span>
+                        <span class="text-red-400">🚫 {{ post.blacklist_count or 0 }}</span>
                     </div>
                 </div>
             </div>
