@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>管理员后台</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --orange: #FF6A00;
+            --orange-light: rgba(255,106,0,0.1);
+            --bg: #F5F5F5;
+            --card: #FFFFFF;
+            --text: #1A1A2E;
+            --hint: #888;
+            --border: #EBEBEB;
+        }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 70px; }
+
+        .top-bar {
+            background: #fff; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+            position: sticky; top: 0; z-index: 50;
+        }
+        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--bg); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .top-title { font-size: 16px; font-weight: 700; flex: 1; }
+        .tg-id-pill { background: var(--orange-light); color: var(--orange); font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+
+        .tabs {
+            display: flex; overflow-x: auto; background: #fff;
+            border-bottom: 2px solid var(--border);
+        }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab {
+            flex: 0 0 auto; padding: 12px 16px;
+            font-size: 13px; font-weight: 600; color: #888;
+            cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+            white-space: nowrap;
+        }
+        .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+        .tab-content { display: none; padding: 12px; }
+        .tab-content.active { display: block; }
+
+        /* 审核卡片 */
+        .review-card {
+            background: var(--card); border-radius: 12px; margin-bottom: 10px;
+            overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .review-card-header {
+            display: flex; gap: 10px; padding: 12px;
+        }
+        .review-thumb {
+            width: 60px; height: 76px; border-radius: 8px;
+            object-fit: cover; background: #eee; flex-shrink: 0;
+        }
+        .review-thumb-placeholder {
+            width: 60px; height: 76px; border-radius: 8px; background: #eee;
+            display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 22px; flex-shrink: 0;
+        }
+        .review-info { flex: 1; }
+        .review-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+        .review-meta { font-size: 12px; color: var(--hint); display: flex; flex-wrap: wrap; gap: 6px; }
+        .review-meta span { display: flex; align-items: center; gap: 2px; }
+        .review-actions {
+            display: flex; gap: 8px; padding: 0 12px 12px;
+        }
+        .btn-approve {
+            flex: 1; padding: 10px; border-radius: 10px; border: none;
+            background: #27AE60; color: #fff; font-size: 14px; font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-reject {
+            flex: 1; padding: 10px; border-radius: 10px; border: none;
+            background: #E74C3C; color: #fff; font-size: 14px; font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-view {
+            flex: 0 0 auto; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+            background: #fff; color: var(--text); font-size: 14px; cursor: pointer;
+        }
+
+        /* 设置区 */
+        .settings-section { background: var(--card); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+        .settings-title { font-size: 13px; font-weight: 700; color: var(--hint); padding: 10px 14px; border-bottom: 1px solid var(--border); }
+        .settings-row { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label { flex: 1; font-size: 14px; }
+        .toggle {
+            width: 44px; height: 24px; border-radius: 12px; background: #ddd; position: relative;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .toggle.on { background: var(--orange); }
+        .toggle-dot {
+            width: 20px; height: 20px; border-radius: 50%; background: #fff;
+            position: absolute; top: 2px; left: 2px; transition: left 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle.on .toggle-dot { left: 22px; }
+
+        /* 文本输入 */
+        .inp {
+            width: 100%; padding: 10px 12px; border-radius: 10px;
+            border: 1.5px solid var(--border); font-size: 14px; color: var(--text);
+            background: var(--bg); outline: none; transition: border-color 0.2s;
+        }
+        .inp:focus { border-color: var(--orange); }
+        .save-btn {
+            width: 100%; padding: 12px; border-radius: 12px; border: none;
+            background: var(--orange); color: #fff; font-size: 15px; font-weight: 700;
+            cursor: pointer; margin-top: 8px;
+        }
+        .save-btn:active { opacity: 0.85; }
+
+        /* 用户列表 */
+        .user-card {
+            background: var(--card); border-radius: 10px; margin-bottom: 8px;
+            padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+        }
+        .user-avatar {
+            width: 38px; height: 38px; border-radius: 50%; background: var(--orange-light);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: 700; color: var(--orange); flex-shrink: 0;
+        }
+        .user-info { flex: 1; }
+        .user-name { font-size: 14px; font-weight: 600; }
+        .user-id { font-size: 11px; color: var(--hint); }
+        .role-badge { font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
+        .role-admin { background: #FFE8F0; color: #E63E6D; }
+        .role-user  { background: var(--orange-light); color: var(--orange); }
+        .role-client{ background: #E8F4FF; color: #1A73E8; }
+        .role-select {
+            font-size: 12px; padding: 4px 8px; border-radius: 8px;
+            border: 1px solid var(--border); background: #fff; cursor: pointer;
+        }
+
+        /* 空状态 */
+        .empty { text-align: center; padding: 40px 20px; color: #aaa; font-size: 14px; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 999; opacity: 0; transition: all 0.3s; pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        .section-label { font-size: 12px; color: var(--hint); margin: 12px 0 6px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- 顶部 -->
+<div class="top-bar">
+    <button class="back-btn" onclick="history.back()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
+    </button>
+    <span class="top-title">管理员后台</span>
+    <span class="tg-id-pill" id="admin-tid"></span>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('pending')">待审核 <span id="badge-pending" style="background:var(--orange);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px;"></span></div>
+    <div class="tab" onclick="switchTab('approved')">已通过</div>
+    <div class="tab" onclick="switchTab('rejected')">已驳回</div>
+    <div class="tab" onclick="switchTab('users')">用户管理</div>
+    <div class="tab" onclick="switchTab('settings')">设置</div>
+</div>
+
+<!-- 待审核 -->
+<div id="tab-pending" class="tab-content active">
+    <div id="pending-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 已通过 -->
+<div id="tab-approved" class="tab-content">
+    <div id="approved-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 已驳回 -->
+<div id="tab-rejected" class="tab-content">
+    <div id="rejected-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 用户管理 -->
+<div id="tab-users" class="tab-content">
+    <div id="users-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 设置 -->
+<div id="tab-settings" class="tab-content">
+    <!-- 表单字段开关 -->
+    <div class="settings-section" id="field-settings">
+        <div class="settings-title">📋 上传表单字段配置</div>
+        <div id="field-toggles"></div>
+    </div>
+
+    <!-- 导航标签 -->
+    <div class="settings-section">
+        <div class="settings-title">🏷️ 分类导航标签</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">导航标签（用逗号分隔）</div>
+            <input class="inp" id="nav-tabs-input" placeholder="如：全部,中圈,大圈,个人">
+            <button class="save-btn" onclick="saveNavTabs()">保存导航标签</button>
+        </div>
+    </div>
+
+    <!-- 公告 -->
+    <div class="settings-section">
+        <div class="settings-title">📢 公告管理</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">公告内容（滚动显示在首页）</div>
+            <textarea class="inp" id="notice-input" rows="3" placeholder="输入公告内容..."></textarea>
+            <button class="save-btn" onclick="saveNotice()">发布公告</button>
+        </div>
+    </div>
+
+    <!-- 认证说明 -->
+    <div class="settings-section">
+        <div class="settings-title">✅ 认证说明</div>
+        <div style="padding:12px 14px;">
+            <textarea class="inp" id="verify-desc-input" rows="2" placeholder="认证说明文字..."></textarea>
+            <button class="save-btn" onclick="saveVerifyDesc()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const TG_ID = (function(){
+        try {
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) return String(tg.initDataUnsafe.user.id);
+        } catch(e){}
+        const m = location.search.match(/tg_id=(\d+)/);
+        return m ? m[1] : localStorage.getItem('tg_id') || '';
+    })();
+    const ADMIN_KEY = '{{ admin_key }}';
+
+    document.getElementById('admin-tid').textContent = 'TG: ' + TG_ID;
+
+    function toast(msg, dur=2000) {
+        const el = document.getElementById('toast');
+        el.textContent = msg; el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), dur);
+    }
+
+    function switchTab(name) {
+        document.querySelectorAll('.tab').forEach((t,i) => {
+            const names=['pending','approved','rejected','users','settings'];
+            t.classList.toggle('active', names[i]===name);
+        });
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-'+name).classList.add('active');
+        if (name==='pending') loadProfiles(0, 'pending-list');
+        else if (name==='approved') loadProfiles(1, 'approved-list');
+        else if (name==='rejected') loadProfiles(2, 'rejected-list');
+        else if (name==='users') loadUsers();
+        else if (name==='settings') loadSettings();
+    }
+
+    function approvalStatusLabel(s) {
+        return ['⏳ 待审核','✅ 已通过','❌ 已驳回'][s] || '';
+    }
+
+    function buildReviewCard(p, showActions) {
+        const photo = p.photos && p.photos.length ? `<img class="review-thumb" src="${p.photos[0]}" onerror="this.style.display='none'">` : '<div class="review-thumb-placeholder">📷</div>';
+        const actions = showActions ? `<div class="review-actions">
+            <button class="btn-approve" onclick="approve(${p.id})">✓ 通过</button>
+            <button class="btn-reject" onclick="reject(${p.id})">✗ 驳回</button>
+            <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
+        </div>` : `<div style="padding:0 12px 12px;display:flex;gap:8px;">
+            <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
+            ${p.is_approved===1 ? `<button style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--orange-light);color:var(--orange);font-size:14px;cursor:pointer;" onclick="toggleVerify(${p.id}, ${p.is_verified})">
+                ${p.is_verified ? '取消认证' : '✓ 设为认证'}
+            </button>` : ''}
+            <button style="padding:10px 14px;border-radius:10px;border:none;background:#FFE8F0;color:#E63E6D;font-size:13px;cursor:pointer;" onclick="deleteProfile(${p.id})">删除</button>
+        </div>`;
+        return `<div class="review-card" id="card-${p.id}">
+            <div class="review-card-header">
+                ${photo}
+                <div class="review-info">
+                    <div class="review-name">${p.name||''} <span style="font-size:11px;color:var(--hint);">${p.number||''}</span></div>
+                    <div class="review-meta">
+                        ${p.category ? `<span>📁 ${p.category}</span>` : ''}
+                        ${p.region ? `<span>📍 ${p.region}</span>` : ''}
+                        ${p.price ? `<span>💰 ${p.price}元</span>` : ''}
+                    </div>
+                    <div style="font-size:11px;color:var(--hint);margin-top:4px;">TG: ${p.tg_id||''}</div>
+                    <div style="font-size:11px;color:var(--hint);">${p.created_at||''}</div>
+                </div>
+            </div>
+            ${actions}
+        </div>`;
+    }
+
+    function loadProfiles(status, containerId) {
+        const el = document.getElementById(containerId);
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/profiles?status=${status}&tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (!data.profiles || !data.profiles.length) { el.innerHTML='<div class="empty">暂无内容</div>'; return; }
+                el.innerHTML = data.profiles.map(p => buildReviewCard(p, status===0)).join('');
+                if (status===0) {
+                    const badge = document.getElementById('badge-pending');
+                    if (badge) badge.textContent = data.profiles.length;
+                }
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function approve(id) {
+        fetch(`/api/admin/approve/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok'){ toast('✅ 已通过'); removeCard(id); }
+                else toast('操作失败: '+d.message);
+            });
+    }
+    function reject(id) {
+        fetch(`/api/admin/reject/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok'){ toast('❌ 已驳回'); removeCard(id); }
+                else toast('操作失败: '+d.message);
+            });
+    }
+    function toggleVerify(id, cur) {
+        fetch(`/api/admin/verify/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID, verified:!cur}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok') { toast((!cur)?'✅ 已认证':'取消认证'); switchTab('approved'); }
+            });
+    }
+    function deleteProfile(id) {
+        if (!confirm('确认删除该资料？')) return;
+        fetch(`/api/admin/profile/${id}`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok') { toast('已删除'); removeCard(id); }
+            });
+    }
+    function removeCard(id) {
+        const el = document.getElementById('card-'+id);
+        if(el){ el.style.transition='opacity 0.3s'; el.style.opacity='0'; setTimeout(()=>el.remove(), 300); }
+        const badge = document.getElementById('badge-pending');
+        if(badge && badge.textContent) badge.textContent = Math.max(0, parseInt(badge.textContent||0)-1) || '';
+    }
+    function viewProfile(id) { location.href = `/profile_detail/${id}?tg_id=${TG_ID}`; }
+
+    function loadUsers() {
+        const el = document.getElementById('users-list');
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/users?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (!data.users || !data.users.length) { el.innerHTML='<div class="empty">暂无用户</div>'; return; }
+                el.innerHTML = data.users.map(u => {
+                    const roleClass = {admin:'role-admin',user:'role-user',client:'role-client'}[u.role]||'role-client';
+                    return `<div class="user-card">
+                        <div class="user-avatar">${(u.first_name||u.username||'?')[0].toUpperCase()}</div>
+                        <div class="user-info">
+                            <div class="user-name">${u.first_name||''} ${u.username ? '@'+u.username : ''}</div>
+                            <div class="user-id">TG ID: ${u.tg_id}</div>
+                        </div>
+                        <select class="role-select" onchange="setRole('${u.tg_id}', this.value)">
+                            <option value="client" ${u.role==='client'?'selected':''}>客户</option>
+                            <option value="user" ${u.role==='user'?'selected':''}>用户</option>
+                            <option value="admin" ${u.role==='admin'?'selected':''}>管理员</option>
+                        </select>
+                    </div>`;
+                }).join('');
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function setRole(tid, role) {
+        fetch('/api/admin/set_role', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID, target_tg_id:tid, role:role}) })
+            .then(r=>r.json()).then(d=>{ toast(d.status==='ok' ? '✅ 角色已更新' : '操作失败'); });
+    }
+
+    function loadSettings() {
+        fetch(`/api/admin/settings?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                // Form fields
+                const fields = data.form_fields || {};
+                const FIELD_LABELS = {name:'姓名',price:'价格',region:'地区',district:'区域',category:'分类',tags:'标签',contact:'联系方式',description:'简介',photos:'照片'};
+                const togglesEl = document.getElementById('field-toggles');
+                togglesEl.innerHTML = Object.entries(FIELD_LABELS).map(([k,v]) => {
+                    const on = fields[k] !== false;
+                    return `<div class="settings-row">
+                        <span class="settings-label">${v}</span>
+                        <div class="toggle ${on?'on':''}" id="toggle-${k}" onclick="toggleField('${k}')">
+                            <div class="toggle-dot"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // Nav tabs
+                const navTabsEl = document.getElementById('nav-tabs-input');
+                navTabsEl.value = (data.nav_tabs||[]).join(',');
+
+                // Notice
+                const noticeEl = document.getElementById('notice-input');
+                noticeEl.value = data.notice || '';
+            });
+    }
+
+    const fieldState = {};
+    function toggleField(key) {
+        const el = document.getElementById('toggle-'+key);
+        const on = el.classList.toggle('on');
+        fieldState[key] = on;
+        fetch('/api/admin/settings', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, form_fields:{[key]:on}})
+        }).then(r=>r.json()).then(d=>{ if(d.status==='ok') toast('已更新'); });
+    }
+
+    function saveNavTabs() {
+        const val = document.getElementById('nav-tabs-input').value.trim();
+        const tabs = val.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+        fetch('/api/admin/nav', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, nav_tabs:tabs})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 导航标签已保存':'保存失败'); });
+    }
+
+    function saveNotice() {
+        const val = document.getElementById('notice-input').value.trim();
+        fetch('/api/admin/announcement', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, content:val})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 公告已发布':'发布失败'); });
+    }
+
+    function saveVerifyDesc() {
+        const val = document.getElementById('verify-desc-input').value.trim();
+        fetch('/api/admin/settings', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, verify_description:val})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 已保存':'保存失败'); });
+    }
+
+    // 初始加载
+    loadProfiles(0, 'pending-list');
+    loadSettings();
+</script>
+</body>
+</html>
