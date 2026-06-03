@@ -54,8 +54,15 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 MY_CHAT_ID = os.environ.get("MY_CHAT_ID")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
-# 获取公网 URL 用于 Webhook (可选)
-BASE_URL = os.environ.get("BASE_URL", "").rstrip('/')
+# 获取公网 URL 用于 Webhook — 支持手动设置或从 Railway 自动检测
+_railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "")
+BASE_URL = (
+    os.environ.get("BASE_URL", "").rstrip('/')
+    or (f"https://{_railway_domain}" if _railway_domain else "")
+)
+if not BASE_URL:
+    print("WARNING: BASE_URL is not set. Webhook cannot be registered and bot commands will not work.")
+    print("  Set BASE_URL=https://<your-domain> in environment variables.")
 # 管理员密钥（生产环境务必设置强密码）
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "matrix_admin_2024")
 if ADMIN_KEY == "matrix_admin_2024":
@@ -348,264 +355,290 @@ def serve_uploads(filename):
 # --- Webhook 逻辑 ---
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
+    if request.headers.get('content-type') != 'application/json':
+        return 'OK'
+    try:
         json_string = request.get_data().decode('utf-8')
         update = telebot.types.Update.de_json(json_string)
-        
-        # 1. 审核回调
-        if update.callback_query:
-            try:
-                action, target = update.callback_query.data.split('_', 1)
-                with get_db() as conn:
-                    if action == 'y':
-                        sql = "UPDATE posts SET is_approved=1 WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
-                        conn.execute(sql, (target[1:] if target.startswith('G') else target,))
-                        bot.answer_callback_query(update.callback_query.id, "审核通过")
-                    else:
-                        sql = "DELETE FROM posts WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
-                        conn.execute(sql, (target[1:] if target.startswith('G') else target,))
-                        bot.answer_callback_query(update.callback_query.id, "已拒绝并删除")
-                bot.edit_message_caption("【审核操作已完成】", MY_CHAT_ID, update.callback_query.message.message_id)
-            except: pass
-            return 'OK'
-
-        p = update.channel_post or update.message or update.edited_channel_post or update.edited_message
-        if not p: return 'OK'
-        
-        uid = p.from_user.id if p.from_user else None
-        txt = p.text or p.caption or ""
-        gid = p.media_group_id
-
-        # 2a. /start 命令 — 三角色分流
-        if txt.startswith('/start') and uid and not update.channel_post:
-            role = get_or_create_user(uid,
-                                      p.from_user.username or '',
-                                      p.from_user.first_name or '')
-            if role == 'admin':
-                if BASE_URL:
-                    markup2 = InlineKeyboardMarkup()
-                    markup2.add(InlineKeyboardButton("🔧 管理员后台",
-                        url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}"))
-                    bot.send_message(uid,
-                        "👋 欢迎回来，管理员！\n\n"
-                        "🔧 点击下方按钮进入 星搭 StarMatch 管理后台，可审核资料、配置表单、发布公告等。",
-                        reply_markup=markup2)
-                else:
-                    bot.send_message(uid,
-                        "👋 欢迎回来，管理员！\n\n"
-                        "🔧 请访问后台管理页面。")
-            elif role == 'user':
-                markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-                if BASE_URL:
-                    markup.add(
-                        KeyboardButton("📝 上传我的资料",
-                                       web_app=WebAppInfo(url=f"{BASE_URL}/upload_profile")),
-                        KeyboardButton("✏️ 修改我的资料",
-                                       web_app=WebAppInfo(url=f"{BASE_URL}/edit_profile"))
-                    )
-                    markup.add(KeyboardButton("👁 查看我的资料"))
-                else:
-                    markup.add(KeyboardButton("📝 上传我的资料"),
-                               KeyboardButton("✏️ 修改我的资料"))
-                    markup.add(KeyboardButton("👁 查看我的资料"))
-                bot.send_message(uid,
-                    "👋 欢迎！\n\n"
-                    "📝 请选择操作：\n"
-                    "• 上传资料后由管理员审核后展示\n"
-                    "• 审核通过前可随时修改\n\n"
-                    "🌟 欢迎使用 星搭 StarMatch",
-                    reply_markup=markup)
-            else:  # client
-                if BASE_URL:
-                    markup = InlineKeyboardMarkup()
-                    markup.add(InlineKeyboardButton("🔍 进入小程序",
-                        web_app=WebAppInfo(url=f"{BASE_URL}/")))
-                    bot.send_message(uid,
-                        "👋 欢迎来到 星搭 StarMatch！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
-                        reply_markup=markup)
-                else:
-                    bot.send_message(uid,
-                        "👋 欢迎来到 星搭 StarMatch！\n\n浏览所有内容 🎉")
-            return 'OK'
-
-        # 2b. /help 命令
-        if txt.startswith('/help') and uid and not update.channel_post:
-            if BASE_URL:
-                markup = InlineKeyboardMarkup()
-                markup.add(InlineKeyboardButton("🔍 进入小程序", web_app=WebAppInfo(url=f"{BASE_URL}/")))
-                bot.send_message(uid,
-                    "📖 帮助信息\n\n"
-                    "可用命令：\n"
-                    "/start — 开始使用\n"
-                    "/upload — 上传资料\n"
-                    "/help — 查看帮助\n\n"
-                    "点击下方按钮进入小程序 🎉",
-                    reply_markup=markup)
-            else:
-                bot.send_message(uid,
-                    "📖 帮助信息\n\n"
-                    "可用命令：\n"
-                    "/start — 开始使用\n"
-                    "/upload — 上传资料\n"
-                    "/help — 查看帮助")
-            return 'OK'
-
-        # 2c. /upload 命令
-        if txt.startswith('/upload') and uid and not update.channel_post:
-            if BASE_URL:
-                markup = InlineKeyboardMarkup()
-                markup.add(InlineKeyboardButton("📝 上传资料",
-                    web_app=WebAppInfo(url=f"{BASE_URL}/upload_profile")))
-                bot.send_message(uid,
-                    "📝 点击下方按钮上传您的资料，审核通过后将展示在平台上。",
-                    reply_markup=markup)
-            else:
-                bot.send_message(uid, "📝 请联系管理员上传资料。")
-            return 'OK'
-
-        # 2d. 用户角色：查看我的资料
-        if txt == '👁 查看我的资料' and uid and not update.channel_post:
-            with get_db() as conn:
-                profile = conn.execute(
-                    "SELECT id FROM profiles WHERE tg_id=? ORDER BY id DESC LIMIT 1", (uid,)
-                ).fetchone()
-            if profile:
-                url = f"{BASE_URL}/profile_detail/{profile['id']}"
-                bot.send_message(uid, f"📋 您的资料链接：\n{url}")
-            else:
-                bot.send_message(uid, "❌ 您还没有上传资料。请先点击「📝 上传我的资料」")
-            return 'OK'
-
-        # 2c. 管理员 /setrole 命令：/setrole <tg_id> <role>
-        if txt.startswith('/setrole ') and str(uid) == str(MY_CHAT_ID):
-            parts = txt[9:].strip().split()
-            if len(parts) == 2:
-                target_id, new_role = parts
-                if new_role in ('admin', 'user', 'client'):
-                    with get_db() as conn:
-                        conn.execute("INSERT OR IGNORE INTO users (tg_id, role, created_at) VALUES (?,?,?)",
-                                     (int(target_id), new_role, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                        conn.execute("UPDATE users SET role=? WHERE tg_id=?", (new_role, int(target_id)))
-                    bot.send_message(MY_CHAT_ID, f"✅ 已将用户 {target_id} 的角色设为 {new_role}")
-                else:
-                    bot.send_message(MY_CHAT_ID, "❌ 角色只能是 admin / user / client")
-            else:
-                bot.send_message(MY_CHAT_ID, "❌ 用法: /setrole <tg_id> <role>")
-            return 'OK'
-
-        # 2. 管理员指令
-        if str(uid) == str(MY_CHAT_ID) or str(p.chat.id) == str(MY_CHAT_ID):
-            # /admin - 获取最新帖子管理员链接
-            if txt == '/admin':
-                with get_db() as conn:
-                    posts = conn.execute("SELECT id, text, date FROM posts WHERE is_approved=1 ORDER BY id DESC LIMIT 10").fetchall()
-                
-                if posts:
-                    msg = "🔧 **管理员链接列表**\n\n"
-                    for p_row in posts:
-                        preview = (p_row['text'] or '无内容')[:25] + '...' if p_row['text'] and len(p_row['text']) > 25 else (p_row['text'] or '无内容')
-                        admin_url = f"{BASE_URL}/post/{p_row['id']}?admin_key={ADMIN_KEY}"
-                        msg += f"[{p_row['id']}] {preview}\n{admin_url}\n\n"
-                    bot.send_message(MY_CHAT_ID, msg, parse_mode='Markdown', disable_web_page_preview=True)
-                else:
-                    bot.send_message(MY_CHAT_ID, "暂无帖子")
-                return 'OK'
-            
-            # /admin <id> - 获取指定帖子管理员链接
-            if txt.startswith('/admin '):
-                try:
-                    post_id = int(txt[7:].strip())
-                    with get_db() as conn:
-                        post = conn.execute("SELECT id, text, date FROM posts WHERE id=?", (post_id,)).fetchone()
-                    
-                    if post:
-                        admin_url = f"{BASE_URL}/post/{post['id']}?admin_key={ADMIN_KEY}"
-                        msg = f"🔧 帖子 #{post['id']} 管理员链接\n\n🔗 {admin_url}"
-                        bot.send_message(MY_CHAT_ID, msg, disable_web_page_preview=True)
-                    else:
-                        bot.send_message(MY_CHAT_ID, f"❌ 帖子 #{post_id} 不存在")
-                except ValueError:
-                    bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /admin <帖子ID>")
-                return 'OK'
-            
-            if txt.startswith('/notice '):
-                with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
-                bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
-                return 'OK'
-            
-            if txt.startswith('/desc '):
-                # 格式: /desc <post_id> <描述文字>
-                parts = txt[6:].split(' ', 1)
-                if len(parts) == 2:
-                    post_id, desc = parts
-                    with get_db() as conn: 
-                        conn.execute("UPDATE posts SET custom_description=? WHERE id=?", (desc, int(post_id)))
-                    bot.send_message(MY_CHAT_ID, f"✅ 已为帖子 {post_id} 设置自定义描述")
-                else:
-                    bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /desc <post_id> <描述文字>")
-                return 'OK'
-            
-            if txt == '/sync':
-                bot.send_message(MY_CHAT_ID, "🔄 正在同步频道未读消息...")
-                count = 0
-                try:
-                    # 临时移除 Webhook，通过 getUpdates 获取未读消息
-                    bot.remove_webhook()
-                    time.sleep(1)
-                    updates = bot.get_updates(limit=100, allowed_updates=['channel_post'])
-                    for update in updates:
-                        h = update.channel_post
-                        if h and str(h.chat.id) == str(CHANNEL_ID):
-                            path, thumbnail = download_media(h)
-                            if path:
-                                with get_db() as conn:
-                                    conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
-                                                 (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
-                                count += 1
-                    # 推进 offset，标记所有已获取的 updates 为已读，防止重新注册 Webhook 后重复投递
-                    if updates:
-                        bot.get_updates(offset=updates[-1].update_id + 1, limit=1)
-                    bot.send_message(MY_CHAT_ID, f"✅ 同步完成，共同步 {count} 条新内容")
-                except Exception as e:
-                    bot.send_message(MY_CHAT_ID, f"❌ 同步失败: {e}")
-                finally:
-                    # 重新注册 Webhook
-                    if BASE_URL:
-                        bot.set_webhook(url=f"{BASE_URL}/webhook")
-                return 'OK'
-
-        # 3. 黑名单拦截
-        if uid:
-            with get_db() as conn:
-                if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return 'OK'
-
-        # 4. 入库处理
-        path, thumbnail = download_media(p)
-        if path:
-            if (update.edited_channel_post or update.edited_message):
-                with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=?, thumbnail=? WHERE msg_id=?", (txt, path, thumbnail, p.message_id))
-            else:
-                with get_db() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved, user_id) VALUES (?,?,?,?,?,?,?,?,?)",
-                                   (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, thumbnail, 1 if update.channel_post else 0, uid))
-                    new_id = cursor.lastrowid
-                
-                # 5. 投稿审核提醒
-                if not update.channel_post and str(uid) != str(MY_CHAT_ID):
-                    markup = InlineKeyboardMarkup().row(
-                        InlineKeyboardButton("✅通过", callback_data=f"y_{'G'+gid if gid else new_id}"),
-                        InlineKeyboardButton("❌拒绝", callback_data=f"n_{'G'+gid if gid else new_id}")
-                    )
-                    bot.send_message(MY_CHAT_ID, f"🔔 新投稿:\n{txt[:100]}", reply_markup=markup)
-                
-                # 6. 发送管理员链接
-                if update.channel_post and new_id:
-                    admin_url = f"{BASE_URL}/post/{new_id}?admin_key={ADMIN_KEY}"
-                    bot.send_message(MY_CHAT_ID, f"📢 新帖子已发布！\n\n🔗 管理链接：{admin_url}")
-        
-        return 'OK'
+        _process_update(update)
+    except Exception as e:
+        print(f"Webhook processing error: {e}")
+    # 永远返回 200 OK，防止 Telegram 因重试而禁用 webhook
     return 'OK'
+
+def _process_update(update):
+    """处理单条 Telegram Update（独立函数便于测试与错误隔离）"""
+    # 1. 审核回调
+    if update.callback_query:
+        try:
+            action, target = update.callback_query.data.split('_', 1)
+            with get_db() as conn:
+                if action == 'y':
+                    sql = "UPDATE posts SET is_approved=1 WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
+                    conn.execute(sql, (target[1:] if target.startswith('G') else target,))
+                    bot.answer_callback_query(update.callback_query.id, "审核通过")
+                else:
+                    sql = "DELETE FROM posts WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
+                    conn.execute(sql, (target[1:] if target.startswith('G') else target,))
+                    bot.answer_callback_query(update.callback_query.id, "已拒绝并删除")
+            # 优先用 edit_message_text（文字通知），失败则尝试 edit_message_caption（媒体通知）
+            try:
+                bot.edit_message_text("【审核操作已完成】", MY_CHAT_ID, update.callback_query.message.message_id)
+            except Exception:
+                try:
+                    bot.edit_message_caption("【审核操作已完成】", MY_CHAT_ID, update.callback_query.message.message_id)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Callback query error: {e}")
+        return
+
+    p = update.channel_post or update.message or update.edited_channel_post or update.edited_message
+    if not p: return
+
+    uid = p.from_user.id if p.from_user else None
+    txt = p.text or p.caption or ""
+    gid = p.media_group_id
+
+    # 2a. /start 命令 — 三角色分流
+    if txt.startswith('/start') and uid and not update.channel_post:
+        role = get_or_create_user(uid,
+                                  p.from_user.username or '',
+                                  p.from_user.first_name or '')
+        if role == 'admin':
+            if BASE_URL:
+                markup2 = InlineKeyboardMarkup()
+                markup2.add(InlineKeyboardButton("🔧 管理员后台",
+                    url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}"))
+                bot.send_message(uid,
+                    "👋 欢迎回来，管理员！\n\n"
+                    "🔧 点击下方按钮进入 星搭 StarMatch 管理后台，可审核资料、配置表单、发布公告等。",
+                    reply_markup=markup2)
+            else:
+                bot.send_message(uid,
+                    "👋 欢迎回来，管理员！\n\n"
+                    "🔧 请访问后台管理页面。")
+        elif role == 'user':
+            markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+            if BASE_URL:
+                markup.add(
+                    KeyboardButton("📝 上传我的资料",
+                                   web_app=WebAppInfo(url=f"{BASE_URL}/upload_profile")),
+                    KeyboardButton("✏️ 修改我的资料",
+                                   web_app=WebAppInfo(url=f"{BASE_URL}/edit_profile"))
+                )
+                markup.add(KeyboardButton("👁 查看我的资料"))
+            else:
+                markup.add(KeyboardButton("📝 上传我的资料"),
+                           KeyboardButton("✏️ 修改我的资料"))
+                markup.add(KeyboardButton("👁 查看我的资料"))
+            bot.send_message(uid,
+                "👋 欢迎！\n\n"
+                "📝 请选择操作：\n"
+                "• 上传资料后由管理员审核后展示\n"
+                "• 审核通过前可随时修改\n\n"
+                "🌟 欢迎使用 星搭 StarMatch",
+                reply_markup=markup)
+        else:  # client
+            if BASE_URL:
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("🔍 进入小程序",
+                    web_app=WebAppInfo(url=f"{BASE_URL}/")))
+                bot.send_message(uid,
+                    "👋 欢迎来到 星搭 StarMatch！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
+                    reply_markup=markup)
+            else:
+                bot.send_message(uid,
+                    "👋 欢迎来到 星搭 StarMatch！\n\n浏览所有内容 🎉")
+        return
+
+    # 2b. /help 命令
+    if txt.startswith('/help') and uid and not update.channel_post:
+        if BASE_URL:
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("🔍 进入小程序", web_app=WebAppInfo(url=f"{BASE_URL}/")))
+            bot.send_message(uid,
+                "📖 帮助信息\n\n"
+                "可用命令：\n"
+                "/start — 开始使用\n"
+                "/upload — 上传资料\n"
+                "/help — 查看帮助\n\n"
+                "点击下方按钮进入小程序 🎉",
+                reply_markup=markup)
+        else:
+            bot.send_message(uid,
+                "📖 帮助信息\n\n"
+                "可用命令：\n"
+                "/start — 开始使用\n"
+                "/upload — 上传资料\n"
+                "/help — 查看帮助")
+        return
+
+    # 2c. /upload 命令
+    if txt.startswith('/upload') and uid and not update.channel_post:
+        if BASE_URL:
+            markup = InlineKeyboardMarkup()
+            markup.add(InlineKeyboardButton("📝 上传资料",
+                web_app=WebAppInfo(url=f"{BASE_URL}/upload_profile")))
+            bot.send_message(uid,
+                "📝 点击下方按钮上传您的资料，审核通过后将展示在平台上。",
+                reply_markup=markup)
+        else:
+            bot.send_message(uid, "📝 请联系管理员上传资料。")
+        return
+
+    # 2d. 用户角色：查看我的资料
+    if txt == '👁 查看我的资料' and uid and not update.channel_post:
+        with get_db() as conn:
+            profile = conn.execute(
+                "SELECT id FROM profiles WHERE tg_id=? ORDER BY id DESC LIMIT 1", (uid,)
+            ).fetchone()
+        if profile:
+            url = f"{BASE_URL}/profile_detail/{profile['id']}"
+            bot.send_message(uid, f"📋 您的资料链接：\n{url}")
+        else:
+            bot.send_message(uid, "❌ 您还没有上传资料。请先点击「📝 上传我的资料」")
+        return
+
+    # 2e. 管理员 /setrole 命令：/setrole <tg_id> <role>
+    if txt.startswith('/setrole ') and str(uid) == str(MY_CHAT_ID):
+        parts = txt[9:].strip().split()
+        if len(parts) == 2:
+            target_id, new_role = parts
+            if new_role in ('admin', 'user', 'client'):
+                with get_db() as conn:
+                    conn.execute("INSERT OR IGNORE INTO users (tg_id, role, created_at) VALUES (?,?,?)",
+                                 (int(target_id), new_role, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                    conn.execute("UPDATE users SET role=? WHERE tg_id=?", (new_role, int(target_id)))
+                bot.send_message(MY_CHAT_ID, f"✅ 已将用户 {target_id} 的角色设为 {new_role}")
+            else:
+                bot.send_message(MY_CHAT_ID, "❌ 角色只能是 admin / user / client")
+        else:
+            bot.send_message(MY_CHAT_ID, "❌ 用法: /setrole <tg_id> <role>")
+        return
+
+    # 3. 管理员指令
+    if str(uid) == str(MY_CHAT_ID) or str(p.chat.id) == str(MY_CHAT_ID):
+        # /admin - 获取最新帖子管理员链接
+        if txt == '/admin':
+            with get_db() as conn:
+                posts = conn.execute("SELECT id, text, date FROM posts WHERE is_approved=1 ORDER BY id DESC LIMIT 10").fetchall()
+
+            if posts:
+                msg = "🔧 **管理员链接列表**\n\n"
+                for p_row in posts:
+                    preview = (p_row['text'] or '无内容')[:25] + '...' if p_row['text'] and len(p_row['text']) > 25 else (p_row['text'] or '无内容')
+                    admin_url = f"{BASE_URL}/post/{p_row['id']}?admin_key={ADMIN_KEY}"
+                    msg += f"[{p_row['id']}] {preview}\n{admin_url}\n\n"
+                bot.send_message(MY_CHAT_ID, msg, parse_mode='Markdown', disable_web_page_preview=True)
+            else:
+                bot.send_message(MY_CHAT_ID, "暂无帖子")
+            return
+
+        # /admin <id> - 获取指定帖子管理员链接
+        if txt.startswith('/admin '):
+            try:
+                post_id = int(txt[7:].strip())
+                with get_db() as conn:
+                    post = conn.execute("SELECT id, text, date FROM posts WHERE id=?", (post_id,)).fetchone()
+
+                if post:
+                    admin_url = f"{BASE_URL}/post/{post['id']}?admin_key={ADMIN_KEY}"
+                    msg = f"🔧 帖子 #{post['id']} 管理员链接\n\n🔗 {admin_url}"
+                    bot.send_message(MY_CHAT_ID, msg, disable_web_page_preview=True)
+                else:
+                    bot.send_message(MY_CHAT_ID, f"❌ 帖子 #{post_id} 不存在")
+            except ValueError:
+                bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /admin <帖子ID>")
+            return
+
+        if txt.startswith('/notice '):
+            with get_db() as conn: conn.execute("UPDATE settings SET value=? WHERE key='notice'", (txt[8:],))
+            bot.send_message(MY_CHAT_ID, "✅ 公告已更新")
+            return
+
+        if txt.startswith('/desc '):
+            # 格式: /desc <post_id> <描述文字>
+            parts = txt[6:].split(' ', 1)
+            if len(parts) == 2:
+                post_id, desc = parts
+                with get_db() as conn:
+                    conn.execute("UPDATE posts SET custom_description=? WHERE id=?", (desc, int(post_id)))
+                bot.send_message(MY_CHAT_ID, f"✅ 已为帖子 {post_id} 设置自定义描述")
+            else:
+                bot.send_message(MY_CHAT_ID, "❌ 格式错误，请使用: /desc <post_id> <描述文字>")
+            return
+
+        if txt == '/setwebhook':
+            if BASE_URL:
+                try:
+                    bot.remove_webhook()
+                    bot.set_webhook(url=f"{BASE_URL}/webhook")
+                    bot.send_message(MY_CHAT_ID, f"✅ Webhook 已重新注册：{BASE_URL}/webhook")
+                except Exception as e:
+                    bot.send_message(MY_CHAT_ID, f"❌ Webhook 注册失败: {e}")
+            else:
+                bot.send_message(MY_CHAT_ID, "❌ BASE_URL 未设置，无法注册 Webhook")
+            return
+
+        if txt == '/sync':
+            bot.send_message(MY_CHAT_ID, "🔄 正在同步频道未读消息...")
+            count = 0
+            try:
+                # 临时移除 Webhook，通过 getUpdates 获取未读消息
+                bot.remove_webhook()
+                time.sleep(1)
+                updates = bot.get_updates(limit=100, allowed_updates=['channel_post'])
+                for upd in updates:
+                    h = upd.channel_post
+                    if h and str(h.chat.id) == str(CHANNEL_ID):
+                        path, thumbnail = download_media(h)
+                        if path:
+                            with get_db() as conn:
+                                conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
+                                             (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
+                            count += 1
+                # 推进 offset，标记所有已获取的 updates 为已读，防止重新注册 Webhook 后重复投递
+                if updates:
+                    bot.get_updates(offset=updates[-1].update_id + 1, limit=1)
+                bot.send_message(MY_CHAT_ID, f"✅ 同步完成，共同步 {count} 条新内容")
+            except Exception as e:
+                bot.send_message(MY_CHAT_ID, f"❌ 同步失败: {e}")
+            finally:
+                # 重新注册 Webhook
+                if BASE_URL:
+                    bot.set_webhook(url=f"{BASE_URL}/webhook")
+            return
+
+    # 4. 黑名单拦截
+    if uid:
+        with get_db() as conn:
+            if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return
+
+    # 5. 入库处理
+    path, thumbnail = download_media(p)
+    if path:
+        if (update.edited_channel_post or update.edited_message):
+            with get_db() as conn: conn.execute("UPDATE posts SET text=?, first_media=?, thumbnail=? WHERE msg_id=?", (txt, path, thumbnail, p.message_id))
+        else:
+            with get_db() as conn:
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved, user_id) VALUES (?,?,?,?,?,?,?,?,?)",
+                               (p.message_id, txt, "官方" if update.channel_post else "投稿", datetime.now().strftime("%Y-%m-%d"), gid, path, thumbnail, 1 if update.channel_post else 0, uid))
+                new_id = cursor.lastrowid
+
+            # 6. 投稿审核提醒
+            if not update.channel_post and str(uid) != str(MY_CHAT_ID):
+                markup = InlineKeyboardMarkup().row(
+                    InlineKeyboardButton("✅通过", callback_data=f"y_{'G'+gid if gid else new_id}"),
+                    InlineKeyboardButton("❌拒绝", callback_data=f"n_{'G'+gid if gid else new_id}")
+                )
+                bot.send_message(MY_CHAT_ID, f"🔔 新投稿:\n{txt[:100]}", reply_markup=markup)
+
+            # 7. 发送管理员链接
+            if update.channel_post and new_id:
+                admin_url = f"{BASE_URL}/post/{new_id}?admin_key={ADMIN_KEY}"
+                bot.send_message(MY_CHAT_ID, f"📢 新帖子已发布！\n\n🔗 管理链接：{admin_url}")
 
 # --- 保留旧系统路由（向后兼容）---
 def _build_post_query_conditions(type_filter, sort, source=''):
