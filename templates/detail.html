@@ -2,168 +2,228 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>内容详情</title>
+    <title>内容详情 · Matrix Hub</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #050505; color: #f1f1f1; }
-        .glass-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
-        .admin-desc { background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(147,51,234,0.1) 100%); border: 1px solid rgba(59,130,246,0.3); }
-        .back-to-top { 
-            position: fixed; 
-            bottom: 80px; 
-            right: 20px; 
-            background: rgba(59,130,246,0.8); 
-            width: 50px; 
-            height: 50px; 
-            border-radius: 50%; 
-            display: none; 
-            align-items: center; 
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            z-index: 1000;
+        :root {
+            --accent: #a78bfa;
+            --accent2: #38bdf8;
+            --bg: #08080f;
+            --surface: #101018;
+            --border: rgba(167,139,250,0.12);
         }
-        .back-to-top:hover { background: rgba(59,130,246,1); transform: scale(1.1); }
-        .back-to-top.show { display: flex; }
-        /* Lightbox styles */
-        .lightbox { 
-            display: none; 
-            position: fixed; 
-            z-index: 9999; 
-            left: 0; 
-            top: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: rgba(0,0,0,0.95); 
-            align-items: center; 
-            justify-content: center;
+        * { -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+        /* 顶部栏 */
+        .top-bar {
+            background: rgba(8,8,15,0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* 管理员备注 */
+        .admin-desc {
+            background: linear-gradient(135deg, rgba(167,139,250,0.08), rgba(56,189,248,0.08));
+            border: 1px solid rgba(167,139,250,0.25);
+        }
+
+        /* 管理员面板 */
+        .admin-panel { background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.25); }
+
+        /* 媒体块 */
+        .media-block { background: #000; border: 1px solid rgba(255,255,255,0.04); }
+
+        /* 正文区 */
+        .content-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+        }
+
+        /* 操作按钮 */
+        .action-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            transition: all 0.18s ease;
+        }
+        .action-btn:active { transform: scale(0.95); }
+        .action-btn.liked    { border-color: rgba(244,114,182,0.5); background: rgba(244,114,182,0.08); }
+        .action-btn.faved    { border-color: rgba(251,191,36,0.5);  background: rgba(251,191,36,0.08); }
+        .action-btn.shared   { border-color: rgba(52,211,153,0.5);  background: rgba(52,211,153,0.08); }
+        .action-btn.blklisted{ border-color: rgba(239,68,68,0.5);   background: rgba(239,68,68,0.08); }
+
+        /* 评论 */
+        .comment-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            animation: fade-in 0.3s ease both;
+        }
+        @keyframes fade-in { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+
+        /* 评论输入框 */
+        .cmt-input {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            transition: border-color 0.2s;
+        }
+        .cmt-input:focus { border-color: rgba(167,139,250,0.5); outline: none; }
+
+        /* Lightbox */
+        .lightbox {
+            display: none; position: fixed; z-index: 9999;
+            inset: 0; background: rgba(0,0,0,0.96);
+            align-items: center; justify-content: center;
         }
         .lightbox.active { display: flex; }
-        .lightbox img { max-width: 90%; max-height: 90%; object-fit: contain; }
-        .lightbox-close { 
-            position: absolute; 
-            top: 20px; 
-            right: 20px; 
-            color: white; 
-            font-size: 40px; 
-            font-weight: bold; 
-            cursor: pointer;
-            z-index: 10000;
+        .lightbox img { max-width: 92%; max-height: 88vh; object-fit: contain; border-radius: 12px; }
+        .lightbox-close {
+            position: absolute; top: 16px; right: 20px;
+            color: rgba(255,255,255,0.6); font-size: 36px;
+            cursor: pointer; line-height: 1;
         }
-        a { color: #60a5fa; text-decoration: underline; }
-        a:hover { color: #93c5fd; }
+        .lightbox-close:hover { color: #fff; }
+
+        /* 回到顶部 */
+        .back-top {
+            position: fixed; bottom: 88px; right: 16px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: rgba(167,139,250,0.85);
+            display: none; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 100;
+            transition: all 0.2s;
+        }
+        .back-top.show { display: flex; }
+        .back-top:hover { background: var(--accent); transform: scale(1.1); }
+
+        /* 链接样式 */
+        .linkify a { color: var(--accent2); text-decoration: none; border-bottom: 1px solid rgba(56,189,248,0.3); }
+        .linkify a:hover { border-color: var(--accent2); }
     </style>
 </head>
-<body class="pb-20">
-    <div class="max-w-xl mx-auto px-4">
-        <header class="flex items-center justify-between py-6">
-            <button onclick="history.back()" class="text-blue-500 text-sm font-bold flex items-center gap-1">
-                <span>←</span> 返回首页
-            </button>
-            <div class="text-[10px] text-gray-600 font-mono tracking-widest">{{ post.date }}</div>
-        </header>
+<body class="pb-24">
 
-        <!-- 管理员自定义描述 - 放在最前面，更醒目 -->
+    <!-- 顶部栏 -->
+    <header class="top-bar sticky top-0 z-50 flex items-center justify-between px-4 h-13 py-3">
+        <button onclick="history.back()" class="flex items-center gap-1.5 text-sm font-medium" style="color: var(--accent)">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            返回
+        </button>
+        <span class="text-xs text-gray-600 font-mono">{{ post.date }}</span>
+    </header>
+
+    <div class="max-w-xl mx-auto px-4 pt-4">
+
+        <!-- 管理员备注 -->
         {% if post.custom_description %}
-        <div class="admin-desc p-6 rounded-2xl mb-6 text-[14px] leading-relaxed text-blue-300">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="text-lg">📝</span>
-                <span class="font-bold text-blue-400">管理员备注</span>
+        <div class="admin-desc p-5 rounded-2xl mb-5 text-sm leading-relaxed" style="color: var(--accent2)">
+            <div class="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider opacity-70">
+                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                管理员备注
             </div>
             <div class="linkify">{{ post.custom_description }}</div>
         </div>
         {% endif %}
 
-        <!-- 管理员功能区域 -->
+        <!-- 管理员操作面板 -->
         {% if is_admin %}
-        <div class="admin-panel bg-red-900/20 border border-red-500/30 rounded-2xl p-6 mb-6">
-            <div class="text-red-400 font-bold mb-4">🔧 管理员操作</div>
-            
-            <!-- 添加/修改描述 -->
-            <div class="mb-4">
-                <label class="text-gray-400 text-sm mb-2 block">自定义描述：</label>
-                <textarea id="adminDesc" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-red-500" rows="3" placeholder="输入管理员备注...">{{ post.custom_description or '' }}</textarea>
-                <button onclick="saveDescription()" class="mt-2 bg-red-600 px-4 py-2 rounded-xl text-sm font-bold">保存描述</button>
+        <div class="admin-panel rounded-2xl p-5 mb-5">
+            <div class="text-red-400 text-sm font-bold mb-4 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                管理员操作
             </div>
-            
-            <!-- 删除帖子 -->
-            <button onclick="deletePost()" class="bg-red-600/50 border border-red-500 px-4 py-2 rounded-xl text-sm font-bold text-red-300 hover:bg-red-600">🗑️ 删除此帖子</button>
+            <label class="text-gray-500 text-xs mb-1.5 block">自定义描述</label>
+            <textarea id="adminDesc" rows="3"
+                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white cmt-input mb-3"
+                placeholder="输入管理员备注…">{{ post.custom_description or '' }}</textarea>
+            <div class="flex gap-2">
+                <button onclick="saveDescription()" class="bg-purple-600/80 hover:bg-purple-600 px-4 py-2 rounded-xl text-sm font-bold transition">保存备注</button>
+                <button onclick="deletePost()" class="bg-red-600/30 hover:bg-red-600/60 border border-red-500/40 px-4 py-2 rounded-xl text-sm font-bold text-red-300 transition">删除帖子</button>
+            </div>
         </div>
         {% endif %}
 
         <!-- 媒体展示 -->
-        <div class="space-y-4 mb-8">
+        <div class="space-y-3 mb-6">
             {% for m in all_media %}
-                {% if m %}
-                <div class="rounded-[2.5rem] overflow-hidden border border-white/5 bg-black shadow-2xl">
-                    {% if m.lower().endswith('.mp4') or m.lower().endswith('.mov') %}
-                        <!-- 视频带封面 -->
-                        {% set thumb_url = m.replace('.mp4', '_thumb.jpg').replace('.MP4', '_thumb.jpg').replace('.mov', '_thumb.jpg').replace('.MOV', '_thumb.jpg') %}
-                        <video src="{{ m }}" poster="{{ thumb_url }}" controls playsinline class="w-full block"></video>
-                    {% else %}
-                        <img src="{{ m }}" class="w-full block shadow-inner cursor-pointer" onclick="openLightbox('{{ m }}')">
-                    {% endif %}
-                </div>
+            {% if m %}
+            <div class="media-block rounded-2xl overflow-hidden shadow-2xl">
+                {% if m.lower().endswith('.mp4') or m.lower().endswith('.mov') %}
+                    {% set thumb_url = m.replace('.mp4','_thumb.jpg').replace('.MP4','_thumb.jpg').replace('.mov','_thumb.jpg').replace('.MOV','_thumb.jpg') %}
+                    <video src="{{ m }}" poster="{{ thumb_url }}" controls playsinline class="w-full block"></video>
+                {% else %}
+                    <img src="{{ m }}" class="w-full block cursor-zoom-in" onclick="openLightbox('{{ m }}')" alt="">
                 {% endif %}
+            </div>
+            {% endif %}
             {% endfor %}
         </div>
 
-        <!-- 正文 - 链接可点击 -->
-        <div class="glass-panel p-8 rounded-[2.5rem] mb-10 text-[16px] leading-relaxed text-gray-200 whitespace-pre-wrap shadow-xl linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
+        <!-- 正文 -->
+        <div class="content-block p-5 rounded-2xl mb-6 text-[15px] leading-relaxed text-gray-200 whitespace-pre-wrap linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
 
-        <!-- 互动 -->
-        <div class="grid grid-cols-2 gap-3 mb-4">
-            <button id="likeBtn" onclick="handleLike()" class="bg-blue-600/10 py-5 rounded-2xl text-center border border-blue-500/20 transition-all active:scale-95">
-                <span id="likeTxt" class="text-blue-400 font-black tracking-widest">❤️ {{ post.likes }} LIKES</span>
+        <!-- 操作按钮组 -->
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <button id="likeBtn" onclick="handleLike()" class="action-btn rounded-2xl py-4 flex flex-col items-center gap-1">
+                <span class="text-2xl" id="likeIcon">♥</span>
+                <span id="likeTxt" class="text-xs font-bold text-pink-400">{{ post.likes }} 点赞</span>
             </button>
-            <button id="blacklistBtn" onclick="handleBlacklist()" class="bg-red-600/10 py-5 rounded-2xl text-center border border-red-500/20 transition-all active:scale-95">
-                <span id="blacklistTxt" class="text-red-400 font-black tracking-widest">🚫 {{ post.blacklist_count or 0 }} 拉黑</span>
+            <button id="favoriteBtn" onclick="handleFavorite()" class="action-btn rounded-2xl py-4 flex flex-col items-center gap-1">
+                <span class="text-2xl" id="favIcon">{% if is_favorited %}★{% else %}☆{% endif %}</span>
+                <span id="favoriteTxt" class="text-xs font-bold text-amber-400">{% if is_favorited %}已收藏{% else %}收藏{% endif %}</span>
             </button>
         </div>
-        
-        <div class="grid grid-cols-2 gap-3 mb-10">
-            <button id="favoriteBtn" onclick="handleFavorite()" class="bg-yellow-600/10 py-5 rounded-2xl text-center border border-yellow-500/20 transition-all active:scale-95">
-                <span id="favoriteTxt" class="text-yellow-400 font-black tracking-widest">
-                    {% if is_favorited %}⭐ 已收藏{% else %}☆ 收藏{% endif %}
-                </span>
+        <div class="grid grid-cols-2 gap-3 mb-8">
+            <button onclick="handleShare()" class="action-btn rounded-2xl py-4 flex flex-col items-center gap-1">
+                <span class="text-2xl">↗</span>
+                <span class="text-xs font-bold text-emerald-400">分享</span>
             </button>
-            <button onclick="handleShare()" class="bg-green-600/10 py-5 rounded-2xl text-center border border-green-500/20 transition-all active:scale-95">
-                <span class="text-green-400 font-black tracking-widest">🔗 分享</span>
+            <button id="blacklistBtn" onclick="handleBlacklist()" class="action-btn rounded-2xl py-4 flex flex-col items-center gap-1">
+                <span class="text-2xl">🚫</span>
+                <span id="blacklistTxt" class="text-xs font-bold text-red-400">{{ post.blacklist_count or 0 }} 拉黑</span>
             </button>
         </div>
 
-        <!-- 评论 -->
-        <div class="space-y-6">
-            <div class="flex gap-2">
-                <input id="cmtInput" type="text" placeholder="说点什么吧..." class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm outline-none focus:border-blue-500">
-                <button onclick="submitCmt()" class="bg-blue-600 px-6 py-3 rounded-2xl text-sm font-bold shadow-lg active:bg-blue-700">发布</button>
+        <!-- 评论区 -->
+        <div class="mb-6">
+            <h3 class="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">评论</h3>
+            <div class="flex gap-2 mb-4">
+                <input id="cmtInput" type="text" placeholder="说点什么…"
+                    class="flex-1 cmt-input rounded-2xl px-4 py-3 text-sm text-white">
+                <button onclick="submitCmt()"
+                    class="bg-purple-600 hover:bg-purple-500 active:scale-95 px-5 py-3 rounded-2xl text-sm font-bold transition">发布</button>
             </div>
-            <div class="space-y-4" id="commentsList">
+            <div class="space-y-3" id="commentsList">
                 {% for c in comments %}
-                <div class="glass-panel p-5 rounded-2xl relative" data-comment-id="{{ c.id }}" data-comment-user="{{ c.user_id or 'anonymous' }}">
-                    <p class="text-[14px] text-gray-300 leading-relaxed linkify">{{ c.content }}</p>
-                    <div class="flex justify-between items-center mt-3">
-                        <div class="text-[10px] text-gray-600 font-mono">{{ c.date }}</div>
+                <div class="comment-item p-4 rounded-2xl" data-comment-id="{{ c.id }}" data-comment-user="{{ c.user_id or 'anonymous' }}">
+                    <p class="text-sm text-gray-300 leading-relaxed linkify">{{ c.content }}</p>
+                    <div class="flex justify-between items-center mt-2">
+                        <span class="text-xs text-gray-600 font-mono">{{ c.date }}</span>
                         {% if is_admin %}
-                        <button onclick="deleteComment({{ c.id }})" class="text-red-400 text-xs hover:text-red-300 transition">🗑️ 删除</button>
+                        <button onclick="deleteComment({{ c.id }})" class="text-red-400/60 hover:text-red-400 text-xs transition">删除</button>
                         {% endif %}
                     </div>
                 </div>
                 {% endfor %}
+                {% if not comments %}
+                <p class="text-center text-gray-600 text-sm py-6">暂无评论，来说第一句话吧 👇</p>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Lightbox for image zoom -->
+    <!-- Lightbox -->
     <div id="lightbox" class="lightbox" onclick="closeLightbox()">
         <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
         <img id="lightbox-img" src="" alt="">
     </div>
 
-    <!-- Back to top button -->
-    <div id="backToTop" class="back-to-top" onclick="scrollToTop()">
-        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+    <!-- 回到顶部 -->
+    <div id="backTop" class="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/>
         </svg>
     </div>
 
@@ -174,239 +234,154 @@
         // This is a simple authentication mechanism. For production, consider using session-based auth.
         const adminKey = "{{ request.args.get('admin_key', '') }}";
         const isAdmin = {{ 'true' if is_admin else 'false' }};
-        
-        // 生成或获取用户ID
+
         function getUserId() {
-            let userId = localStorage.getItem('user_id');
-            if (!userId) {
-                userId = 'user_' + Math.random().toString(36).substring(2, 11);
-                localStorage.setItem('user_id', userId);
-            }
-            return userId;
+            let uid = localStorage.getItem('user_id');
+            if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
+            return uid;
         }
-        
-        // 获取拉黑列表
-        function getBlacklistedItems() {
-            return JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
-        }
-        
-        // 添加到拉黑列表
-        function addToBlacklist(itemId) {
-            let blacklisted = getBlacklistedItems();
-            blacklisted.push(itemId);
-            localStorage.setItem('m_blacklisted', JSON.stringify(blacklisted));
-        }
-        
-        // 管理员保存描述
+        function getBlacklistedItems() { return JSON.parse(localStorage.getItem('m_blacklisted') || '[]'); }
+        function addToBlacklist(id) { let b = getBlacklistedItems(); b.push(id); localStorage.setItem('m_blacklisted', JSON.stringify(b)); }
+
         function saveDescription() {
-            if (!isAdmin) {
-                alert('权限不足');
-                return;
-            }
+            if (!isAdmin) return alert('权限不足');
             const desc = document.getElementById('adminDesc').value;
             fetch('/api/admin/description/' + pid, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({admin_key: adminKey, description: desc})
-            }).then(res => {
-                if(res.ok) {
-                    alert('描述已保存');
-                    location.reload();
-                } else {
-                    alert('保存失败，权限不足');
-                }
-            });
+            }).then(res => { if(res.ok) { alert('描述已保存'); location.reload(); } else alert('保存失败，权限不足'); });
         }
-        
-        // 管理员删除帖子
+
         function deletePost() {
-            if (!isAdmin) {
-                alert('权限不足');
-                return;
-            }
-            if(!confirm('确定要删除此帖子吗？此操作不可恢复！')) return;
+            if (!isAdmin) return alert('权限不足');
+            if (!confirm('确定要删除此帖子吗？此操作不可恢复！')) return;
             fetch('/api/admin/post/' + pid, {
-                method: 'DELETE',
-                headers: {'Content-Type': 'application/json'},
+                method:'DELETE', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({admin_key: adminKey})
-            }).then(res => {
-                if(res.ok) {
-                    alert('帖子已删除');
-                    location.href = '/';
-                } else {
-                    alert('删除失败，权限不足');
-                }
-            });
+            }).then(res => { if(res.ok) { alert('帖子已删除'); location.href = '/'; } else alert('删除失败，权限不足'); });
         }
-        
+
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if(liked.includes(pid)) return alert('您已经点过赞啦！');
+            if (liked.includes(pid)) return alert('您已经点过赞啦！');
             fetch('/api/like/'+pid, {method:'POST'}).then(res => {
-                if(res.ok) {
-                    liked.push(pid);
-                    localStorage.setItem('m_liked', JSON.stringify(liked));
-                    const txt = document.getElementById('likeTxt');
-                    const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
-                    txt.innerText = '❤️ ' + num + ' LIKES';
-                    document.getElementById('likeBtn').style.opacity = '0.5';
+                if (res.ok) {
+                    liked.push(pid); localStorage.setItem('m_liked', JSON.stringify(liked));
+                    const el = document.getElementById('likeTxt');
+                    const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
+                    el.textContent = n + ' 点赞';
+                    document.getElementById('likeBtn').classList.add('liked');
                 }
             });
         }
 
         function handleBlacklist() {
-            let blacklisted = getBlacklistedItems();
-            if(blacklisted.includes(pid)) return alert('您已经拉黑过此内容！');
-            if(!confirm('确定要拉黑此内容吗？拉黑后将不再显示。')) return;
-            
+            let bl = getBlacklistedItems();
+            if (bl.includes(pid)) return alert('您已经拉黑过此内容！');
+            if (!confirm('确定要拉黑此内容吗？拉黑后将不再显示。')) return;
             fetch('/api/blacklist/'+pid, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({user_id: getUserId()})
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({user_id: getUserId()})
             }).then(res => {
-                if(res.ok) {
+                if (res.ok) {
                     addToBlacklist(pid);
-                    const txt = document.getElementById('blacklistTxt');
-                    const num = parseInt(txt.innerText.match(/\d+/)[0]) + 1;
-                    txt.innerText = '🚫 ' + num + ' 拉黑';
-                    document.getElementById('blacklistBtn').style.opacity = '0.5';
+                    const el = document.getElementById('blacklistTxt');
+                    const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
+                    el.textContent = n + ' 拉黑';
+                    document.getElementById('blacklistBtn').classList.add('blklisted');
                     alert('已拉黑此内容，返回首页后将不再显示');
                 }
             });
         }
 
-        function submitCmt() {
-            const val = document.getElementById('cmtInput').value.trim();
-            if(!val) return;
-            fetch('/api/comment/'+pid, {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({content: val, user_id: getUserId()})
-            }).then(() => location.reload());
-        }
-        
-        function deleteComment(commentId) {
-            if (!isAdmin) {
-                alert('只有管理员可以删除评论');
-                return;
-            }
-            
-            if(!confirm('确定要删除这条评论吗？')) return;
-            fetch('/api/admin/comment/'+commentId, {
-                method:'DELETE',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({admin_key: adminKey})
-            }).then(res => {
-                if(res.ok) {
-                    document.querySelector('[data-comment-id="'+commentId+'"]').remove();
-                } else {
-                    alert('删除失败：权限不足');
-                }
-            });
-        }
-        
         function handleFavorite() {
-            const method = isFavorited ? 'DELETE' : 'POST';
             fetch('/api/favorite/'+pid, {
-                method: method,
+                method: isFavorited ? 'DELETE' : 'POST',
                 headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({user_id: getUserId()})
-            }).then(res => res.json()).then(data => {
-                if(data.status === 'ok') {
+                body: JSON.stringify({user_id: getUserId()})
+            }).then(r => r.json()).then(d => {
+                if (d.status === 'ok') {
                     isFavorited = !isFavorited;
-                    const txt = document.getElementById('favoriteTxt');
-                    txt.innerText = isFavorited ? '⭐ 已收藏' : '☆ 收藏';
-                    document.getElementById('favoriteBtn').style.opacity = isFavorited ? '0.7' : '1';
+                    document.getElementById('favIcon').textContent = isFavorited ? '★' : '☆';
+                    document.getElementById('favoriteTxt').textContent = isFavorited ? '已收藏' : '收藏';
+                    const btn = document.getElementById('favoriteBtn');
+                    isFavorited ? btn.classList.add('faved') : btn.classList.remove('faved');
                 }
             });
         }
-        
+
         function handleShare() {
             const url = window.location.href;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => {
-                    alert('链接已复制到剪贴板！');
-                }).catch(() => {
-                    // Fallback
-                    promptCopyLink(url);
-                });
+            if (navigator.share) {
+                navigator.share({ url }).catch(() => {});
+            } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(() => alert('链接已复制！')).catch(() => promptCopyLink(url));
             } else {
                 promptCopyLink(url);
             }
         }
-        
+
         function promptCopyLink(url) {
-            const textarea = document.createElement('textarea');
-            textarea.value = url;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            try {
-                document.execCommand('copy');
-                alert('链接已复制到剪贴板！');
-            } catch(e) {
-                prompt('请手动复制链接:', url);
-            }
-            document.body.removeChild(textarea);
+            const ta = document.createElement('textarea');
+            ta.value = url; ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta); ta.select();
+            try { document.execCommand('copy'); alert('链接已复制！'); } catch { prompt('请手动复制链接:', url); }
+            document.body.removeChild(ta);
         }
-        
-        function openLightbox(imageSrc) {
-            document.getElementById('lightbox-img').src = imageSrc;
+
+        function submitCmt() {
+            const val = document.getElementById('cmtInput').value.trim();
+            if (!val) return;
+            fetch('/api/comment/'+pid, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({content: val, user_id: getUserId()})
+            }).then(() => location.reload());
+        }
+
+        function deleteComment(cid) {
+            if (!isAdmin) return alert('只有管理员可以删除评论');
+            if (!confirm('确定要删除这条评论吗？')) return;
+            fetch('/api/admin/comment/'+cid, {
+                method:'DELETE', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({admin_key: adminKey})
+            }).then(res => {
+                if (res.ok) document.querySelector('[data-comment-id="'+cid+'"]').remove();
+                else alert('删除失败：权限不足');
+            });
+        }
+
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
             document.getElementById('lightbox').classList.add('active');
         }
-        
-        function closeLightbox() {
-            document.getElementById('lightbox').classList.remove('active');
-        }
-        
-        function scrollToTop() {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-        
-        // Show/hide back to top button
-        window.addEventListener('scroll', function() {
-            const backToTop = document.getElementById('backToTop');
-            if (window.pageYOffset > 300) {
-                backToTop.classList.add('show');
-            } else {
-                backToTop.classList.remove('show');
-            }
-        });
-        
-        // 将文本中的 URL 转换为可点击链接（安全处理）
+        function closeLightbox() { document.getElementById('lightbox').classList.remove('active'); }
+
         function linkify(text) {
-            const urlPattern = /(https?:\/\/[^\s<]+)/g;
-            // 首先转义 HTML 特殊字符
             const div = document.createElement('div');
             div.textContent = text;
-            const escapedText = div.innerHTML;
-            // 然后将 URL 转换为链接
-            return escapedText.replace(urlPattern, function(url) {
-                // 再次转义 URL 以防止 XSS
+            const escaped = div.innerHTML;
+            return escaped.replace(/(https?:\/\/[^\s<]+)/g, url => {
                 const a = document.createElement('a');
-                a.href = url;
-                a.textContent = url;
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
+                a.href = url; a.textContent = url;
+                a.target = '_blank'; a.rel = 'noopener noreferrer';
                 return a.outerHTML;
             });
         }
 
+        window.addEventListener('scroll', () => {
+            const btn = document.getElementById('backTop');
+            window.pageYOffset > 300 ? btn.classList.add('show') : btn.classList.remove('show');
+        });
+
         window.onload = () => {
-            let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if(liked.includes(pid)) document.getElementById('likeBtn').style.opacity = '0.5';
-            
-            let blacklisted = getBlacklistedItems();
-            if(blacklisted.includes(pid)) document.getElementById('blacklistBtn').style.opacity = '0.5';
-            
-            // Update favorite button state
-            if(isFavorited) document.getElementById('favoriteBtn').style.opacity = '0.7';
-            
-            // 将正文和评论中的链接转换为可点击
+            const liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
+            if (liked.includes(pid)) document.getElementById('likeBtn').classList.add('liked');
+            const bl = getBlacklistedItems();
+            if (bl.includes(pid)) document.getElementById('blacklistBtn').classList.add('blklisted');
+            if (isFavorited) document.getElementById('favoriteBtn').classList.add('faved');
+
             document.querySelectorAll('.linkify').forEach(el => {
-                const originalText = el.textContent || el.innerText;
-                el.innerHTML = linkify(originalText);
+                el.innerHTML = linkify(el.textContent || el.innerText);
             });
         };
     </script>
