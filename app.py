@@ -104,11 +104,25 @@ def init_db():
                 date TEXT, 
                 PRIMARY KEY (user_id, post_id)
             );
+            CREATE TABLE IF NOT EXISTS users (
+                tg_id TEXT PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                last_name TEXT,
+                photo_url TEXT,
+                registered_at TEXT
+            );
             CREATE INDEX IF NOT EXISTS idx_posts_approved ON posts(is_approved);
             CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date DESC);
             CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
             CREATE INDEX IF NOT EXISTS idx_favorites_user ON user_favorites(user_id);
             INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('site_title', 'Matrix Hub');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('filter_tags', '[]');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_comments', '1');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_submissions', '1');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('submission_notice', '');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('accent_color', '#a78bfa');
         ''')
         
         # 字段自动迁移逻辑 (安全处理旧数据库)
@@ -131,6 +145,9 @@ def init_db():
         if 'thumbnail' not in columns:
             try: conn.execute("ALTER TABLE posts ADD COLUMN thumbnail TEXT")
             except: pass
+        if 'tags' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN tags TEXT DEFAULT ''")
+            except: pass
         
         # 迁移 comments 表的 user_id 字段
         cursor = conn.execute("PRAGMA table_info(comments)")
@@ -140,6 +157,11 @@ def init_db():
             except: pass
 
 init_db()
+
+# --- 设置辅助函数 ---
+def get_setting(conn, key, default=''):
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row['value'] if row else default
 
 # --- 媒体处理 ---
 def generate_video_thumbnail(video_path, thumbnail_path):
@@ -378,8 +400,8 @@ def webhook():
     return 'OK'
 
 # --- 路由渲染 ---
-def _build_post_query_conditions(type_filter, sort, source=''):
-    """根据类型过滤、来源过滤和排序参数构建 SQL 片段（均来自服务端枚举，非用户原始输入）。"""
+def _build_post_query_conditions(type_filter, sort, source='', tag=''):
+    """根据类型过滤、来源过滤、自定义标签和排序参数构建 SQL 片段（均来自服务端枚举，非用户原始输入）。"""
     if type_filter == 'video':
         type_condition = " AND (p.first_media LIKE '%.mp4' OR p.first_media LIKE '%.mov')"
     elif type_filter == 'image':
@@ -395,7 +417,9 @@ def _build_post_query_conditions(type_filter, sort, source=''):
     else:
         source_condition = ""
     order_clause = "p.likes DESC, p.id DESC" if sort == 'hot' else "p.id DESC"
-    return type_condition, source_condition, order_clause
+    # tag condition uses a bind parameter for safety
+    tag_condition = " AND (',' || COALESCE(p.tags,'') || ',') LIKE '%,' || ? || ',%'" if tag else ""
+    return type_condition, source_condition, order_clause, tag_condition
 
 @app.route('/')
 def index():
@@ -405,34 +429,47 @@ def index():
     type_filter = request.args.get('type', '')
     sort = request.args.get('sort', 'latest')
     source = request.args.get('source', '')
+    tag = request.args.get('tag', '')
     per_page = 20
     offset = (page - 1) * per_page
-    type_condition, source_condition, order_clause = _build_post_query_conditions(type_filter, sort, source)
+    type_condition, source_condition, order_clause, tag_condition = _build_post_query_conditions(type_filter, sort, source, tag)
     
     with get_db() as conn:
-        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+        notice = get_setting(conn, 'notice')
+        site_title = get_setting(conn, 'site_title', 'Matrix Hub')
+        accent_color = get_setting(conn, 'accent_color', '#a78bfa')
+        import json as _json
+        try:
+            filter_tags = _json.loads(get_setting(conn, 'filter_tags', '[]'))
+        except Exception:
+            filter_tags = []
         # 分组查询：如果是媒体组只显示一张，排除用户拉黑的内容，附带评论数
+        base_params = [f'%{q}%', user_id]
+        if tag:
+            base_params.append(tag)
         sql = f"""SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
                  FROM posts p 
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                 {type_condition}{source_condition}
+                 {type_condition}{source_condition}{tag_condition}
                  GROUP BY COALESCE(p.media_group_id, p.id) 
                  ORDER BY {order_clause}
                  LIMIT ? OFFSET ?"""
-        posts = conn.execute(sql, (f'%{q}%', user_id, per_page, offset)).fetchall()
+        posts = conn.execute(sql, base_params + [per_page, offset]).fetchall()
         
         # 获取总数用于分页
         count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
                        WHERE p.is_approved=1 AND p.text LIKE ? 
                        AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                       {type_condition}{source_condition}"""
-        total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
+                       {type_condition}{source_condition}{tag_condition}"""
+        total = conn.execute(count_sql, base_params).fetchone()['total']
         
-    return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", 
+    return render_template('index.html', posts=posts, notice=notice, 
                          q=q, user_id=user_id, page=page,
                          total_pages=(total + per_page - 1) // per_page,
-                         type_filter=type_filter, sort=sort, source=source)
+                         type_filter=type_filter, sort=sort, source=source,
+                         tag=tag, filter_tags=filter_tags,
+                         site_title=site_title, accent_color=accent_color)
 
 @app.route('/api/posts')
 def api_posts():
@@ -443,26 +480,30 @@ def api_posts():
     type_filter = request.args.get('type', '')
     sort = request.args.get('sort', 'latest')
     source = request.args.get('source', '')
+    tag = request.args.get('tag', '')
     per_page = 20
     offset = (page - 1) * per_page
-    type_condition, source_condition, order_clause = _build_post_query_conditions(type_filter, sort, source)
+    type_condition, source_condition, order_clause, tag_condition = _build_post_query_conditions(type_filter, sort, source, tag)
 
     with get_db() as conn:
+        base_params = [f'%{q}%', user_id]
+        if tag:
+            base_params.append(tag)
         sql = f"""SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
                  FROM posts p 
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                 {type_condition}{source_condition}
+                 {type_condition}{source_condition}{tag_condition}
                  GROUP BY COALESCE(p.media_group_id, p.id) 
                  ORDER BY {order_clause}
                  LIMIT ? OFFSET ?"""
-        posts = conn.execute(sql, (f'%{q}%', user_id, per_page, offset)).fetchall()
+        posts = conn.execute(sql, base_params + [per_page, offset]).fetchall()
 
         count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
                        WHERE p.is_approved=1 AND p.text LIKE ? 
                        AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                       {type_condition}{source_condition}"""
-        total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
+                       {type_condition}{source_condition}{tag_condition}"""
+        total = conn.execute(count_sql, base_params).fetchone()['total']
 
     total_pages = (total + per_page - 1) // per_page
     posts_data = [{
@@ -575,7 +616,7 @@ def get_favorites():
 def favorites_page():
     user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
-        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+        notice = get_setting(conn, 'notice')
         # Get favorites with grouping similar to index
         posts = conn.execute("""
             SELECT p.* FROM posts p 
@@ -584,19 +625,30 @@ def favorites_page():
             GROUP BY COALESCE(p.media_group_id, p.id)
             ORDER BY f.date DESC
         """, (user_id,)).fetchall()
-    return render_template('favorites.html', posts=posts, notice=notice['value'] if notice else "", user_id=user_id)
+    return render_template('favorites.html', posts=posts, notice=notice, user_id=user_id)
 
 @app.route('/upload')
 def upload_guide():
     user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
-        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
-    return render_template('upload.html', user_id=user_id, notice=notice['value'] if notice else "", bot_username=BOT_USERNAME)
+        notice = get_setting(conn, 'notice')
+        submission_notice = get_setting(conn, 'submission_notice')
+        enable_submissions = get_setting(conn, 'enable_submissions', '1')
+    return render_template('upload.html', user_id=user_id, notice=notice,
+                          submission_notice=submission_notice,
+                          enable_submissions=(enable_submissions == '1'),
+                          bot_username=BOT_USERNAME)
 
 @app.route('/profile')
 def profile():
     user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
+        # 获取 TG 用户信息（如果已注册）
+        tg_user = None
+        if user_id.startswith('tg_'):
+            tg_numeric = user_id[3:]
+            tg_user = conn.execute("SELECT * FROM users WHERE tg_id=?", (tg_numeric,)).fetchone()
+
         # 获取用户收藏
         favorites = conn.execute("""
             SELECT p.* FROM posts p 
@@ -611,8 +663,17 @@ def profile():
             JOIN posts p ON c.post_id = p.id 
             WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 10
         """, (user_id,)).fetchall()
+
+        # 获取用户投稿记录
+        submissions = []
+        if user_id.startswith('tg_'):
+            tg_numeric = user_id[3:]
+            submissions = conn.execute("""
+                SELECT * FROM posts WHERE CAST(user_id AS TEXT)=? ORDER BY id DESC LIMIT 20
+            """, (tg_numeric,)).fetchall()
         
-    return render_template('profile.html', favorites=favorites, comments=comments, user_id=user_id)
+    return render_template('profile.html', favorites=favorites, comments=comments,
+                          submissions=submissions, tg_user=tg_user, user_id=user_id)
 
 @app.route('/api/admin/description/<int:post_id>', methods=['POST'])
 def update_description(post_id):
@@ -645,6 +706,97 @@ def admin_delete_comment(comment_id):
     with get_db() as conn:
         conn.execute("DELETE FROM comments WHERE id=?", (comment_id,))
     return jsonify({"status":"ok"})
+
+@app.route('/admin/panel')
+def admin_panel():
+    admin_key = request.args.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return "Access Denied — 请在 URL 中附加 ?admin_key=<你的密钥>", 403
+    import json as _json
+    with get_db() as conn:
+        settings = {row['key']: row['value'] for row in conn.execute("SELECT key, value FROM settings").fetchall()}
+        pending = conn.execute("SELECT COUNT(*) as c FROM posts WHERE is_approved=0").fetchone()['c']
+        total_posts = conn.execute("SELECT COUNT(*) as c FROM posts WHERE is_approved=1").fetchone()['c']
+        total_users = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()['c']
+        pending_posts = conn.execute("SELECT * FROM posts WHERE is_approved=0 ORDER BY id DESC LIMIT 20").fetchall()
+    try:
+        filter_tags = _json.loads(settings.get('filter_tags', '[]'))
+    except Exception:
+        filter_tags = []
+    return render_template('admin.html', settings=settings, admin_key=admin_key,
+                          pending=pending, total_posts=total_posts, total_users=total_users,
+                          pending_posts=pending_posts, filter_tags=filter_tags)
+
+@app.route('/api/admin/settings', methods=['GET', 'POST'])
+def admin_settings_api():
+    if request.method == 'GET':
+        admin_key = request.args.get('admin_key', '')
+    else:
+        data = request.json or {}
+        admin_key = data.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    if request.method == 'GET':
+        with get_db() as conn:
+            settings = {row['key']: row['value'] for row in conn.execute("SELECT key, value FROM settings").fetchall()}
+        return jsonify(settings)
+    allowed_keys = {'site_title', 'notice', 'filter_tags', 'enable_comments', 'enable_submissions', 'submission_notice', 'accent_color'}
+    with get_db() as conn:
+        for key, value in data.items():
+            if key in allowed_keys:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/admin/post/<int:post_id>/approve', methods=['POST'])
+def admin_approve_post(post_id):
+    admin_key = request.json.get('admin_key', '') if request.is_json else ''
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    with get_db() as conn:
+        conn.execute("UPDATE posts SET is_approved=1 WHERE id=?", (post_id,))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/admin/post/<int:post_id>/tags', methods=['POST'])
+def admin_set_post_tags(post_id):
+    admin_key = request.json.get('admin_key', '') if request.is_json else ''
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    tags = request.json.get('tags', '')
+    with get_db() as conn:
+        conn.execute("UPDATE posts SET tags=? WHERE id=?", (tags, post_id))
+    return jsonify({"status":"ok"})
+
+@app.route('/api/user/init', methods=['POST'])
+def user_init():
+    data = request.json or {}
+    tg_id = data.get('tg_id')
+    if not tg_id:
+        return jsonify({"status":"error", "message":"缺少 tg_id"}), 400
+    username = data.get('username', '')
+    first_name = data.get('first_name', '')
+    last_name = data.get('last_name', '')
+    photo_url = data.get('photo_url', '')
+    with get_db() as conn:
+        existing = conn.execute("SELECT tg_id FROM users WHERE tg_id=?", (str(tg_id),)).fetchone()
+        if existing:
+            conn.execute("UPDATE users SET username=?, first_name=?, last_name=? WHERE tg_id=?",
+                        (username, first_name, last_name, str(tg_id)))
+        else:
+            conn.execute("INSERT INTO users (tg_id, username, first_name, last_name, photo_url, registered_at) VALUES (?,?,?,?,?,?)",
+                        (str(tg_id), username, first_name, last_name, photo_url, datetime.now().strftime("%Y-%m-%d")))
+    return jsonify({"status":"ok", "user_id": f"tg_{tg_id}"})
+
+@app.route('/my-submissions')
+def my_submissions():
+    user_id = request.args.get('user_id', 'anonymous')
+    submissions = []
+    if user_id.startswith('tg_'):
+        tg_numeric = user_id[3:]
+        with get_db() as conn:
+            submissions = conn.execute("""
+                SELECT * FROM posts WHERE CAST(user_id AS TEXT)=? ORDER BY id DESC
+            """, (tg_numeric,)).fetchall()
+    return render_template('my_submissions.html', submissions=submissions, user_id=user_id)
 
 if __name__ == '__main__':
     # 自动设置 Webhook

@@ -223,6 +223,20 @@
             return uid;
         }
 
+        // Auto Telegram login — register TG user with server on every open
+        (function() {
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (!tg || !tg.initDataUnsafe || !tg.initDataUnsafe.user) return;
+                const u = tg.initDataUnsafe.user;
+                fetch('/api/user/init', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({tg_id: u.id, username: u.username || '', first_name: u.first_name || '', last_name: u.last_name || ''})
+                }).catch(() => {});
+            } catch(e) {}
+        })();
+
         window.onload = function() {
             const params = new URLSearchParams(window.location.search);
             const adminKey = params.get('admin_key') || '';
@@ -437,7 +451,7 @@
 
     <!-- 顶部导航 -->
     <nav class="top-nav sticky top-0 z-50 px-4 h-14 flex items-center justify-between">
-        <a href="/" class="logo-text text-xl font-black tracking-widest">MATRIX HUB</a>
+        <a href="/" class="logo-text text-xl font-black tracking-widest">{{ site_title }}</a>
         <div class="flex items-center gap-2">
             <a href="/upload?user_id={{ user_id }}" class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.3)">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -481,7 +495,7 @@
     <!-- 分区 + 类型筛选栏 -->
     <div class="px-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <a href="/?q={{ q }}&sort={{ sort }}&user_id={{ user_id }}"
-           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if not source and not type_filter %}active{% endif %}">全部</a>
+           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if not source and not type_filter and not tag %}active{% endif %}">全部</a>
         <a href="/?q={{ q }}&source=official&sort={{ sort }}&user_id={{ user_id }}"
            class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if source == 'official' %}active{% endif %}">📢 官方</a>
         <a href="/?q={{ q }}&source=user&sort={{ sort }}&user_id={{ user_id }}"
@@ -490,10 +504,14 @@
            class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if type_filter == 'image' %}active{% endif %}">🖼 图片</a>
         <a href="/?q={{ q }}&type=video&source={{ source }}&sort={{ sort }}&user_id={{ user_id }}"
            class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if type_filter == 'video' %}active{% endif %}">▶ 视频</a>
+        {% for ft in filter_tags %}
+        <a href="/?q={{ q }}&tag={{ ft | urlencode }}&sort={{ sort }}&user_id={{ user_id }}"
+           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if tag == ft %}active{% endif %}">{{ ft }}</a>
+        {% endfor %}
         <div class="ml-auto flex items-center gap-1.5 flex-shrink-0">
-            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&sort=latest&user_id={{ user_id }}"
+            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&tag={{ tag }}&sort=latest&user_id={{ user_id }}"
                class="sort-btn rounded-full px-3 py-1 text-xs font-medium {% if sort != 'hot' %}active{% endif %}">最新</a>
-            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&sort=hot&user_id={{ user_id }}"
+            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&tag={{ tag }}&sort=hot&user_id={{ user_id }}"
                class="sort-btn rounded-full px-3 py-1 text-xs font-medium {% if sort == 'hot' %}active{% endif %}">🔥 热门</a>
         </div>
     </div>
