@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>内容详情 · Matrix Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -11,9 +12,11 @@
             --bg: #08080f;
             --surface: #101018;
             --border: rgba(167,139,250,0.12);
+            --tg-text: #e5e7eb;
+            --tg-hint: #6b7280;
         }
         * { -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); color: #e5e7eb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: var(--bg); color: var(--tg-text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
         /* 顶部栏 */
         .top-bar {
@@ -192,9 +195,66 @@
             background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #f87171;
         }
         .confirm-ok.danger:hover { background: rgba(239,68,68,0.25); }
+
+        /* 标签云 */
+        .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag-item {
+            padding: 5px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid rgba(167,139,250,0.3);
+            background: rgba(167,139,250,0.08);
+            color: var(--accent);
+            cursor: default;
+            transition: all 0.15s;
+        }
+        .tag-item:hover { background: rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.55); }
+
+        /* 懒加载图片 shimmer */
+        .img-lazy { opacity: 0; transition: opacity 0.35s ease; }
+        .img-lazy.loaded { opacity: 1; }
+        .img-skeleton {
+            position: absolute; inset: 0;
+            background: linear-gradient(90deg, #1a1a2e 25%, #222240 50%, #1a1a2e 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+            z-index: 1;
+        }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     </style>
+    <script>
+        // ── Telegram WebApp 初始化 ────────────────────────────────────────────
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            tg.ready();
+            tg.expand();
+            const tp = tg.themeParams || {};
+            const root = document.documentElement;
+            if (tp.bg_color)           { root.style.setProperty('--bg',      tp.bg_color); root.style.setProperty('--surface', tp.bg_color); }
+            if (tp.secondary_bg_color) { root.style.setProperty('--surface', tp.secondary_bg_color); }
+            if (tp.text_color)         { root.style.setProperty('--tg-text', tp.text_color); }
+            if (tp.hint_color)         { root.style.setProperty('--tg-hint', tp.hint_color); }
+            if (tp.link_color)         { root.style.setProperty('--accent',  tp.link_color); }
+            if (tp.button_color)       { root.style.setProperty('--accent2', tp.button_color); }
+            if (tp.section_separator_color) root.style.setProperty('--border', tp.section_separator_color + '30');
+        })();
+
+        function haptic(type) {
+            try {
+                const hf = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback;
+                if (!hf) return;
+                if (type === 'light')    hf.impactOccurred('light');
+                else if (type === 'medium') hf.impactOccurred('medium');
+                else if (type === 'select') hf.selectionChanged();
+                else if (type === 'success') hf.notificationOccurred('success');
+                else if (type === 'error') hf.notificationOccurred('error');
+            } catch(e) {}
+        }
+    </script>
 </head>
-<body class="pb-24">
+<body class="pb-24" style="color:var(--tg-text)">
 
     <!-- 顶部栏 -->
     <header class="top-bar sticky top-0 z-50 flex items-center justify-between px-4 h-13 py-3">
@@ -204,7 +264,7 @@
             </svg>
             返回
         </button>
-        <span class="text-xs text-gray-600 font-mono">{{ post.date }}</span>
+        <span class="text-xs font-mono" style="color:var(--tg-hint)">{{ post.date }}</span>
     </header>
 
     <div class="max-w-xl mx-auto px-4 pt-4">
@@ -267,7 +327,25 @@
         {% endif %}
 
         <!-- 正文 -->
-        <div class="content-block p-5 rounded-2xl mb-6 text-base leading-7 text-gray-200 whitespace-pre-wrap linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
+        <div class="content-block p-5 rounded-2xl mb-5 text-base leading-7 whitespace-pre-wrap linkify" id="postContent" style="color:var(--tg-text)">{{ post.text or "暂无详细文案说明。" }}</div>
+
+        <!-- 标签云 -->
+        {% set tags = (post.text or '').split() %}
+        {% set tag_list = [] %}
+        {% for word in tags %}
+            {% if word.startswith('#') and word|length > 1 %}
+                {% set _ = tag_list.append(word) %}
+            {% endif %}
+        {% endfor %}
+        {% if tag_list %}
+        <div class="mb-5">
+            <div class="tag-cloud">
+                {% for tag in tag_list[:12] %}
+                <span class="tag-item">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <!-- 操作按钮组 -->
         <div class="grid grid-cols-2 gap-3 mb-3">
@@ -293,19 +371,19 @@
 
         <!-- 评论区 -->
         <div class="mb-6">
-            <h3 class="text-sm font-bold text-gray-400 mb-3 uppercase tracking-wider">评论</h3>
+            <h3 class="text-sm font-bold mb-3 uppercase tracking-wider" style="color:var(--tg-hint)">评论</h3>
             <div class="flex gap-2 mb-4">
                 <input id="cmtInput" type="text" placeholder="说点什么…"
-                    class="flex-1 cmt-input rounded-2xl px-4 py-3 text-sm text-white">
+                    class="flex-1 cmt-input rounded-2xl px-4 py-3 text-sm" style="color:var(--tg-text)">
                 <button onclick="submitCmt()"
                     class="bg-purple-600 hover:bg-purple-500 active:scale-95 px-5 py-3 rounded-2xl text-sm font-bold transition">发布</button>
             </div>
             <div class="space-y-3" id="commentsList">
                 {% for c in comments %}
                 <div class="comment-item p-4 rounded-2xl" data-comment-id="{{ c.id }}" data-comment-user="{{ c.user_id or 'anonymous' }}">
-                    <p class="text-sm text-gray-300 leading-relaxed linkify">{{ c.content }}</p>
+                    <p class="text-sm leading-relaxed linkify" style="color:var(--tg-text)">{{ c.content }}</p>
                     <div class="flex justify-between items-center mt-2">
-                        <span class="text-xs text-gray-600 font-mono">{{ c.date }}</span>
+                        <span class="text-xs font-mono" style="color:var(--tg-hint)">{{ c.date }}</span>
                         {% if is_admin %}
                         <button onclick="deleteComment({{ c.id }})" class="text-red-400/60 hover:text-red-400 text-xs transition">删除</button>
                         {% endif %}
@@ -344,6 +422,12 @@
         const isAdmin = {{ 'true' if is_admin else 'false' }};
 
         function getUserId() {
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) {
+                    return 'tg_' + tg.initDataUnsafe.user.id;
+                }
+            } catch(e) {}
             let uid = localStorage.getItem('user_id');
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
@@ -367,6 +451,7 @@
 
         // ── 自定义确认弹窗 ───────────────────────────────────────────────────
         function showConfirm(msg, onConfirm, danger = false) {
+            haptic('select');
             const overlay = document.createElement('div');
             overlay.className = 'confirm-overlay';
             overlay.innerHTML = `<div class="confirm-box">
@@ -377,9 +462,37 @@
                 </div>
             </div>`;
             document.body.appendChild(overlay);
-            overlay.querySelector('.confirm-cancel').onclick = () => overlay.remove();
+            overlay.querySelector('.confirm-cancel').onclick = () => { haptic('light'); overlay.remove(); };
             overlay.querySelector('.confirm-ok').onclick = () => { overlay.remove(); onConfirm(); };
         }
+
+        // ── Telegram BackButton ───────────────────────────────────────────────
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            tg.BackButton.show();
+            tg.BackButton.onClick(() => history.back());
+        })();
+
+        // ── Telegram MainButton ───────────────────────────────────────────────
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg || !tg.MainButton) return;
+            const btn = tg.MainButton;
+            btn.setText('收藏此内容');
+            btn.color = tg.themeParams.button_color || '#a78bfa';
+            btn.textColor = tg.themeParams.button_text_color || '#ffffff';
+            if (!isFavorited) {
+                btn.show();
+            }
+            btn.onClick(() => {
+                haptic('medium');
+                if (!isFavorited) {
+                    handleFavorite();
+                    btn.hide();
+                }
+            });
+        })();
 
         // ── 媒体轮播 ─────────────────────────────────────────────────────────
         const carousel = document.getElementById('mediaCarousel');
@@ -391,6 +504,7 @@
                 scrollTimer = setTimeout(() => {
                     const idx = Math.round(carousel.scrollLeft / carousel.offsetWidth);
                     dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+                    haptic('select');
                 }, 50);
             });
         }
@@ -406,8 +520,8 @@
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({admin_key: adminKey, description: desc})
             }).then(res => {
-                if (res.ok) { showToast('描述已保存', 'success'); setTimeout(() => location.reload(), 1000); }
-                else showToast('保存失败，权限不足', 'error');
+                if (res.ok) { haptic('success'); showToast('描述已保存', 'success'); setTimeout(() => location.reload(), 1000); }
+                else { haptic('error'); showToast('保存失败，权限不足', 'error'); }
             });
         }
 
@@ -418,8 +532,8 @@
                     method:'DELETE', headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({admin_key: adminKey})
                 }).then(res => {
-                    if (res.ok) { showToast('帖子已删除', 'success'); setTimeout(() => location.href = '/', 900); }
-                    else showToast('删除失败，权限不足', 'error');
+                    if (res.ok) { haptic('success'); showToast('帖子已删除', 'success'); setTimeout(() => location.href = '/', 900); }
+                    else { haptic('error'); showToast('删除失败，权限不足', 'error'); }
                 });
             }, true);
         }
@@ -427,9 +541,10 @@
         // ── 点赞 ──────────────────────────────────────────────────────────────
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if (liked.includes(pid)) return showToast('您已经点过赞啦！');
+            if (liked.includes(pid)) { haptic('light'); return showToast('您已经点过赞啦！'); }
             fetch('/api/like/'+pid, {method:'POST'}).then(res => {
                 if (res.ok) {
+                    haptic('success');
                     liked.push(pid); localStorage.setItem('m_liked', JSON.stringify(liked));
                     const el = document.getElementById('likeTxt');
                     const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
@@ -443,13 +558,14 @@
         // ── 拉黑 ──────────────────────────────────────────────────────────────
         function handleBlacklist() {
             let bl = getBlacklistedItems();
-            if (bl.includes(pid)) return showToast('您已经拉黑过此内容！');
+            if (bl.includes(pid)) { haptic('light'); return showToast('您已经拉黑过此内容！'); }
             showConfirm('确定要拉黑此内容吗？拉黑后将不再显示。', () => {
                 fetch('/api/blacklist/'+pid, {
                     method:'POST', headers:{'Content-Type':'application/json'},
                     body: JSON.stringify({user_id: getUserId()})
                 }).then(res => {
                     if (res.ok) {
+                        haptic('medium');
                         addToBlacklist(pid);
                         const el = document.getElementById('blacklistTxt');
                         const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
@@ -469,23 +585,40 @@
                 body: JSON.stringify({user_id: getUserId()})
             }).then(r => r.json()).then(d => {
                 if (d.status === 'ok') {
+                    haptic(isFavorited ? 'light' : 'success');
                     isFavorited = !isFavorited;
                     document.getElementById('favIcon').textContent = isFavorited ? '★' : '☆';
                     document.getElementById('favoriteTxt').textContent = isFavorited ? '已收藏' : '收藏';
                     const btn = document.getElementById('favoriteBtn');
                     isFavorited ? btn.classList.add('faved') : btn.classList.remove('faved');
                     showToast(isFavorited ? '已加入收藏 ★' : '已取消收藏', 'success');
+                    // Update Telegram MainButton
+                    try {
+                        const tg = window.Telegram && window.Telegram.WebApp;
+                        if (tg && tg.MainButton) {
+                            isFavorited ? tg.MainButton.hide() : tg.MainButton.show();
+                        }
+                    } catch(e) {}
                 }
             });
         }
 
         // ── 分享 ──────────────────────────────────────────────────────────────
         function handleShare() {
+            haptic('light');
             const url = window.location.href;
+            // Try Telegram share first
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (tg && tg.openTelegramLink) {
+                    tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(url));
+                    return;
+                }
+            } catch(e) {}
             if (navigator.share) {
                 navigator.share({ url }).catch(() => {});
             } else if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => showToast('链接已复制！', 'success')).catch(() => promptCopyLink(url));
+                navigator.clipboard.writeText(url).then(() => { haptic('success'); showToast('链接已复制！', 'success'); }).catch(() => promptCopyLink(url));
             } else {
                 promptCopyLink(url);
             }
@@ -511,6 +644,7 @@
                 body: JSON.stringify({content: val, user_id: getUserId()})
             }).then(r => r.json()).then(d => {
                 if (d.status === 'ok' && d.id) {
+                    haptic('success');
                     input.value = '';
                     const hint = document.getElementById('noCommentHint');
                     if (hint) hint.remove();
@@ -521,17 +655,18 @@
                     div.dataset.commentUser = getUserId();
                     // Escape content for display (server already escapes on save)
                     const escaped = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                    div.innerHTML = `<p class="text-sm text-gray-300 leading-relaxed">${escaped}</p>
+                    div.innerHTML = `<p class="text-sm leading-relaxed" style="color:var(--tg-text)">${escaped}</p>
                         <div class="flex justify-between items-center mt-2">
-                            <span class="text-xs text-gray-600 font-mono">${d.date}</span>
+                            <span class="text-xs font-mono" style="color:var(--tg-hint)">${d.date}</span>
                             ${isAdmin ? `<button onclick="deleteComment(${d.id})" class="text-red-400/60 hover:text-red-400 text-xs transition">删除</button>` : ''}
                         </div>`;
                     list.insertBefore(div, list.firstChild);
                     showToast('评论发布成功', 'success');
                 } else if (d.status === 'error') {
+                    haptic('error');
                     showToast(d.message || '发布失败', 'error');
                 }
-            }).catch(() => showToast('网络错误，请重试', 'error'))
+            }).catch(() => { haptic('error'); showToast('网络错误，请重试', 'error'); })
               .finally(() => { btn.disabled = false; });
         }
 
@@ -543,14 +678,16 @@
                     body: JSON.stringify({admin_key: adminKey})
                 }).then(res => {
                     if (res.ok) {
+                        haptic('success');
                         document.querySelector('[data-comment-id="'+cid+'"]').remove();
                         showToast('评论已删除');
-                    } else showToast('删除失败：权限不足', 'error');
+                    } else { haptic('error'); showToast('删除失败：权限不足', 'error'); }
                 });
             }, true);
         }
 
         function openLightbox(src) {
+            haptic('light');
             document.getElementById('lightbox-img').src = src;
             document.getElementById('lightbox').classList.add('active');
         }
@@ -579,6 +716,15 @@
             const bl = getBlacklistedItems();
             if (bl.includes(pid)) document.getElementById('blacklistBtn').classList.add('blklisted');
             if (isFavorited) document.getElementById('favoriteBtn').classList.add('faved');
+
+            // Hide web back button when Telegram BackButton is shown
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (tg && tg.BackButton && tg.BackButton.isVisible) {
+                    const header = document.querySelector('.top-bar');
+                    if (header) header.style.display = 'none';
+                }
+            } catch(e) {}
 
             document.querySelectorAll('.linkify').forEach(el => {
                 el.innerHTML = linkify(el.textContent || el.innerText);
