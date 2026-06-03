@@ -61,6 +61,15 @@ if ADMIN_KEY == "matrix_admin_2024":
 
 bot = telebot.TeleBot(BOT_TOKEN, threaded=False)
 
+# 获取机器人用户名（优先使用环境变量，否则通过 API 获取）
+BOT_USERNAME = os.environ.get("BOT_USERNAME", "")
+if not BOT_USERNAME and BOT_TOKEN:
+    try:
+        BOT_USERNAME = bot.get_me().username or ""
+    except Exception as e:
+        print(f"Warning: Could not fetch bot username: {e}")
+        BOT_USERNAME = ""
+
 # --- 数据库管理 ---
 def get_db():
     conn = sqlite3.connect(DB_PATH, timeout=30)
@@ -582,7 +591,7 @@ def upload_guide():
     user_id = request.args.get('user_id', 'anonymous')
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
-    return render_template('upload.html', user_id=user_id, notice=notice['value'] if notice else "")
+    return render_template('upload.html', user_id=user_id, notice=notice['value'] if notice else "", bot_username=BOT_USERNAME)
 
 @app.route('/profile')
 def profile():
