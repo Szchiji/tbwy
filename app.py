@@ -141,9 +141,12 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_profiles_approved ON profiles(is_approved);
             CREATE INDEX IF NOT EXISTS idx_profiles_category ON profiles(category);
             CREATE INDEX IF NOT EXISTS idx_profiles_tg ON profiles(tg_id);
-            INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 Matrix Hub');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('notice', '欢迎访问 星搭 StarMatch');
             INSERT OR IGNORE INTO settings (key, value) VALUES ('form_fields', '{"name":true,"region":true,"district":true,"price":true,"category":true,"tags":true,"contact":true,"description":true}');
             INSERT OR IGNORE INTO settings (key, value) VALUES ('nav_tabs', '["全部","中圈","大圈","个人"]');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('app_name', '星搭 StarMatch');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('price_unit', 'P');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_contact', '');
         ''')
         
         # 字段自动迁移逻辑 (安全处理旧数据库)
@@ -172,6 +175,13 @@ def init_db():
         comment_columns = [c[1] for c in cursor.fetchall()]
         if 'user_id' not in comment_columns:
             try: conn.execute("ALTER TABLE comments ADD COLUMN user_id TEXT")
+            except: pass
+
+        # 迁移 profiles 表：添加 pin_type 字段
+        cursor = conn.execute("PRAGMA table_info(profiles)")
+        profile_columns = [c[1] for c in cursor.fetchall()]
+        if 'pin_type' not in profile_columns:
+            try: conn.execute("ALTER TABLE profiles ADD COLUMN pin_type INTEGER DEFAULT 0")
             except: pass
 
 init_db()
@@ -373,7 +383,7 @@ def webhook():
                     url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}"))
                 bot.send_message(uid,
                     "👋 欢迎回来，管理员！\n\n"
-                    "🔧 点击下方按钮进入管理后台，可审核资料、配置表单、发布公告等。",
+                    "🔧 点击下方按钮进入 星搭 StarMatch 管理后台，可审核资料、配置表单、发布公告等。",
                     reply_markup=markup2)
             elif role == 'user':
                 markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -393,7 +403,8 @@ def webhook():
                     "👋 欢迎！\n\n"
                     "📝 请选择操作：\n"
                     "• 上传资料后由管理员审核后展示\n"
-                    "• 审核通过前可随时修改",
+                    "• 审核通过前可随时修改\n\n"
+                    "🌟 欢迎使用 星搭 StarMatch",
                     reply_markup=markup)
             else:  # client
                 markup = InlineKeyboardMarkup()
@@ -404,7 +415,7 @@ def webhook():
                     markup.add(InlineKeyboardButton("🔍 进入小程序",
                         url=f"{BASE_URL}/"))
                 bot.send_message(uid,
-                    "👋 欢迎！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
+                    "👋 欢迎来到 星搭 StarMatch！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
                     reply_markup=markup)
             return 'OK'
 
@@ -857,6 +868,11 @@ def api_create_profile():
     if not tg_id:
         return jsonify({"status": "error", "message": "请先登录"}), 401
 
+    # 黑名单检查
+    with get_db() as conn:
+        if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (int(tg_id),)).fetchone():
+            return jsonify({"status": "error", "message": "您已被限制使用本服务"}), 403
+
     # 检查是否已有资料（一个用户一条）
     with get_db() as conn:
         existing = conn.execute("SELECT id FROM profiles WHERE tg_id=?", (int(tg_id),)).fetchone()
@@ -910,6 +926,11 @@ def api_update_profile(profile_id):
     tg_id = get_tg_id_from_request()
     if not tg_id:
         return jsonify({"status": "error", "message": "请先登录"}), 401
+
+    # 黑名单检查
+    with get_db() as conn:
+        if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (int(tg_id),)).fetchone():
+            return jsonify({"status": "error", "message": "您已被限制使用本服务"}), 403
 
     with get_db() as conn:
         row = conn.execute("SELECT * FROM profiles WHERE id=?", (profile_id,)).fetchone()
@@ -1071,10 +1092,18 @@ def api_admin_settings():
             form_fields = conn.execute("SELECT value FROM settings WHERE key='form_fields'").fetchone()
             nav_tabs = conn.execute("SELECT value FROM settings WHERE key='nav_tabs'").fetchone()
             notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+            app_name = conn.execute("SELECT value FROM settings WHERE key='app_name'").fetchone()
+            price_unit = conn.execute("SELECT value FROM settings WHERE key='price_unit'").fetchone()
+            verify_desc = conn.execute("SELECT value FROM settings WHERE key='verify_description'").fetchone()
+            admin_contact = conn.execute("SELECT value FROM settings WHERE key='admin_contact'").fetchone()
         return jsonify({
             "form_fields": json.loads(form_fields['value']) if form_fields else {},
             "nav_tabs": json.loads(nav_tabs['value']) if nav_tabs else [],
-            "notice": notice['value'] if notice else ''
+            "notice": notice['value'] if notice else '',
+            "app_name": app_name['value'] if app_name else '星搭 StarMatch',
+            "price_unit": price_unit['value'] if price_unit else 'P',
+            "verify_description": verify_desc['value'] if verify_desc else '',
+            "admin_contact": admin_contact['value'] if admin_contact else '',
         })
     # POST
     if not _check_admin_auth():
@@ -1097,6 +1126,15 @@ def api_admin_settings():
         if 'verify_description' in data:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('verify_description', ?)",
                          (html.escape(data['verify_description']),))
+        if 'app_name' in data:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('app_name', ?)",
+                         (html.escape(data['app_name']),))
+        if 'price_unit' in data:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('price_unit', ?)",
+                         (html.escape(data['price_unit']),))
+        if 'admin_contact' in data:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_contact', ?)",
+                         (html.escape(data['admin_contact']),))
     return jsonify({"status": "ok"})
 
 @app.route('/api/admin/announcement', methods=['POST'])
@@ -1141,7 +1179,14 @@ def api_admin_set_role(tg_id):
 def api_admin_delete_profile_alias(profile_id):
     if not _check_admin_auth():
         return jsonify({"status": "error", "message": "无权限"}), 403
+    data = request.json or {}
+    blacklist_uploader = data.get('blacklist', False)
     with get_db() as conn:
+        if blacklist_uploader:
+            row = conn.execute("SELECT tg_id FROM profiles WHERE id=?", (profile_id,)).fetchone()
+            if row and row['tg_id']:
+                conn.execute("INSERT OR IGNORE INTO blacklist (user_id, date) VALUES (?,?)",
+                             (row['tg_id'], datetime.now().strftime("%Y-%m-%d")))
         conn.execute("DELETE FROM profile_favorites WHERE profile_id=?", (profile_id,))
         conn.execute("DELETE FROM profiles WHERE id=?", (profile_id,))
     return jsonify({"status": "ok"})
@@ -1175,6 +1220,57 @@ def api_admin_nav():
         return jsonify({"status": "error", "message": "格式错误"}), 400
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('nav_tabs', ?)", (json.dumps(tabs),))
+    return jsonify({"status": "ok"})
+
+# POST /api/admin/pin/<profile_id> — 设置置顶类型
+@app.route('/api/admin/pin/<int:profile_id>', methods=['POST'])
+def api_admin_set_pin(profile_id):
+    if not _check_admin_auth():
+        return jsonify({"status": "error", "message": "无权限"}), 403
+    data = request.json or {}
+    pin_type = int(data.get('pin_type', 0))
+    if pin_type not in (0, 1, 2):
+        return jsonify({"status": "error", "message": "无效置顶类型"}), 400
+    with get_db() as conn:
+        conn.execute("UPDATE profiles SET pin_type=? WHERE id=?", (pin_type, profile_id))
+    return jsonify({"status": "ok", "pin_type": pin_type})
+
+# GET /api/admin/blacklisted_users — 黑名单用户列表
+@app.route('/api/admin/blacklisted_users')
+def api_admin_blacklisted_users():
+    if not _check_admin_auth():
+        return jsonify({"status": "error", "message": "无权限"}), 403
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT b.user_id, b.date,
+                   u.username, u.first_name
+            FROM blacklist b
+            LEFT JOIN users u ON b.user_id = u.tg_id
+            ORDER BY b.date DESC
+        """).fetchall()
+    return jsonify({"users": [dict(r) for r in rows]})
+
+# POST /api/admin/blacklist_user — 拉黑用户
+@app.route('/api/admin/blacklist_user', methods=['POST'])
+def api_admin_blacklist_user():
+    if not _check_admin_auth():
+        return jsonify({"status": "error", "message": "无权限"}), 403
+    data = request.json or {}
+    tg_id = data.get('tg_id')
+    if not tg_id:
+        return jsonify({"status": "error", "message": "缺少 tg_id"}), 400
+    with get_db() as conn:
+        conn.execute("INSERT OR IGNORE INTO blacklist (user_id, date) VALUES (?,?)",
+                     (int(tg_id), datetime.now().strftime("%Y-%m-%d")))
+    return jsonify({"status": "ok"})
+
+# DELETE /api/admin/blacklist_user/<tg_id> — 移出黑名单
+@app.route('/api/admin/blacklist_user/<int:tg_id>', methods=['DELETE'])
+def api_admin_unblacklist_user(tg_id):
+    if not _check_admin_auth():
+        return jsonify({"status": "error", "message": "无权限"}), 403
+    with get_db() as conn:
+        conn.execute("DELETE FROM blacklist WHERE user_id=?", (tg_id,))
     return jsonify({"status": "ok"})
 
 # --- 资料收藏 ---
@@ -1245,12 +1341,14 @@ def upload_profile_page():
     with get_db() as conn:
         form_fields_row = conn.execute("SELECT value FROM settings WHERE key='form_fields'").fetchone()
         nav_tabs_row = conn.execute("SELECT value FROM settings WHERE key='nav_tabs'").fetchone()
+        admin_contact_row = conn.execute("SELECT value FROM settings WHERE key='admin_contact'").fetchone()
     form_fields = json.loads(form_fields_row['value']) if form_fields_row else {}
     nav_tabs = json.loads(nav_tabs_row['value']) if nav_tabs_row else ["全部","中圈","大圈","个人"]
     categories = [t for t in nav_tabs if t != '全部']
     if not categories:
         categories = ["中圈", "大圈", "个人"]
-    return render_template('upload_profile.html', tg_id=tg_id, form_fields=form_fields, categories=categories)
+    admin_contact = admin_contact_row['value'] if admin_contact_row else ''
+    return render_template('upload_profile.html', tg_id=tg_id, form_fields=form_fields, categories=categories, admin_contact=admin_contact)
 
 @app.route('/edit_profile')
 def edit_profile_page():
@@ -1269,13 +1367,15 @@ def edit_profile_page():
     with get_db() as conn:
         form_fields_row = conn.execute("SELECT value FROM settings WHERE key='form_fields'").fetchone()
         nav_tabs_row = conn.execute("SELECT value FROM settings WHERE key='nav_tabs'").fetchone()
+        admin_contact_row = conn.execute("SELECT value FROM settings WHERE key='admin_contact'").fetchone()
     form_fields = json.loads(form_fields_row['value']) if form_fields_row else {}
     nav_tabs = json.loads(nav_tabs_row['value']) if nav_tabs_row else ["全部","中圈","大圈","个人"]
     categories = [t for t in nav_tabs if t != '全部']
     if not categories:
         categories = ["中圈", "大圈", "个人"]
+    admin_contact = admin_contact_row['value'] if admin_contact_row else ''
     return render_template('upload_profile.html', tg_id=tg_id, form_fields=form_fields,
-                           categories=categories, profile=profile, is_edit=True)
+                           categories=categories, profile=profile, is_edit=True, admin_contact=admin_contact)
 
 @app.route('/admin')
 def admin_panel():
@@ -1315,11 +1415,48 @@ def index():
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
         nav_tabs_row = conn.execute("SELECT value FROM settings WHERE key='nav_tabs'").fetchone()
-        total = conn.execute(f"SELECT COUNT(*) FROM profiles p WHERE {where}", params).fetchone()[0]
-        profiles = conn.execute(f"SELECT * FROM profiles p WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
-                                params + [per_page, offset]).fetchall()
-        regions = conn.execute("SELECT DISTINCT region FROM profiles WHERE is_approved=1 AND region!='' ORDER BY region").fetchall()
+        app_name_row = conn.execute("SELECT value FROM settings WHERE key='app_name'").fetchone()
 
+        # 置顶逻辑 (仅第一页)
+        pinned_profiles = []
+        pinned_ids = []
+        if page == 1:
+            perm_pins = conn.execute(
+                f"SELECT * FROM profiles p WHERE {where} AND p.pin_type=1 ORDER BY p.id DESC", params
+            ).fetchall()
+            rot_pin = conn.execute(
+                f"SELECT * FROM profiles p WHERE {where} AND p.pin_type=2 ORDER BY RANDOM() LIMIT 1", params
+            ).fetchone()
+            raw_pinned = list(perm_pins) + ([rot_pin] if rot_pin else [])
+            for r in raw_pinned:
+                d = dict(r)
+                try: d['photos'] = json.loads(d['photos'] or '[]')
+                except: d['photos'] = []
+                try: d['tags'] = json.loads(d['tags'] or '[]')
+                except: d['tags'] = []
+                pinned_profiles.append(d)
+            pinned_ids = [d['id'] for d in pinned_profiles]
+
+        # 普通资料（排除已置顶）
+        excl = ""
+        excl_params = list(params)
+        if pinned_ids:
+            placeholders = ','.join('?' * len(pinned_ids))
+            excl = f" AND p.id NOT IN ({placeholders})"
+            excl_params += pinned_ids
+
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM profiles p WHERE {where}{excl}", excl_params
+        ).fetchone()[0]
+        profiles = conn.execute(
+            f"SELECT * FROM profiles p WHERE {where}{excl} ORDER BY {order} LIMIT ? OFFSET ?",
+            excl_params + [per_page, offset]
+        ).fetchall()
+        regions = conn.execute(
+            "SELECT DISTINCT region FROM profiles WHERE is_approved=1 AND region!='' ORDER BY region"
+        ).fetchall()
+
+    app_name = app_name_row['value'] if app_name_row else '星搭 StarMatch'
     nav_tabs = json.loads(nav_tabs_row['value']) if nav_tabs_row else ["全部","中圈","大圈","个人"]
     profiles_list = []
     for r in profiles:
@@ -1332,12 +1469,14 @@ def index():
 
     return render_template('index.html',
                            profiles=profiles_list,
+                           pinned_profiles=pinned_profiles,
                            notice=notice['value'] if notice else '',
                            q=q, tg_id=tg_id, page=page,
                            total_pages=(total + per_page - 1) // per_page,
                            category=category, region=region, sort=sort,
                            nav_tabs=nav_tabs,
-                           regions=[r['region'] for r in regions])
+                           regions=[r['region'] for r in regions],
+                           app_name=app_name)
 
 @app.route('/api/index_profiles')
 def api_index_profiles():
@@ -1365,9 +1504,33 @@ def api_index_profiles():
     order = "p.price ASC" if sort == 'price_asc' else ("p.price DESC" if sort == 'price_desc' else "p.id DESC")
 
     with get_db() as conn:
-        total = conn.execute(f"SELECT COUNT(*) FROM profiles p WHERE {where}", params).fetchone()[0]
-        rows = conn.execute(f"SELECT * FROM profiles p WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
-                            params + [per_page, (page-1)*per_page]).fetchall()
+        # 置顶逻辑 (仅第一页)
+        pinned_ids = []
+        if page == 1:
+            perm_pins = conn.execute(
+                f"SELECT id FROM profiles p WHERE {where} AND p.pin_type=1", params
+            ).fetchall()
+            rot_pin = conn.execute(
+                f"SELECT id FROM profiles p WHERE {where} AND p.pin_type=2 ORDER BY RANDOM() LIMIT 1", params
+            ).fetchone()
+            pinned_ids = [r['id'] for r in perm_pins]
+            if rot_pin:
+                pinned_ids.append(rot_pin['id'])
+
+        excl = ""
+        excl_params = list(params)
+        if pinned_ids:
+            placeholders = ','.join('?' * len(pinned_ids))
+            excl = f" AND p.id NOT IN ({placeholders})"
+            excl_params += pinned_ids
+
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM profiles p WHERE {where}{excl}", excl_params
+        ).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT * FROM profiles p WHERE {where}{excl} ORDER BY {order} LIMIT ? OFFSET ?",
+            excl_params + [per_page, (page-1)*per_page]
+        ).fetchall()
 
     profiles_data = []
     for r in rows:

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>管理员后台</title>
+    <title>星搭 StarMatch - 管理后台</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
@@ -147,6 +147,21 @@
         #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
         .section-label { font-size: 12px; color: var(--hint); margin: 12px 0 6px; font-weight: 600; }
+
+        /* 置顶按钮 */
+        .pin-btn { padding: 6px 10px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .pin-none { background: #f0f0f0; color: #666; }
+        .pin-perm { background: #FFE8F0; color: #E63E6D; }
+        .pin-rot  { background: #F0EAFF; color: #7B2FBE; }
+
+        /* 黑名单卡片 */
+        .blacklist-card {
+            background: var(--card); border-radius: 10px; margin-bottom: 8px;
+            padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+        }
+        .bl-info { flex: 1; }
+        .bl-name { font-size: 14px; font-weight: 600; }
+        .bl-meta { font-size: 11px; color: var(--hint); }
     </style>
 </head>
 <body>
@@ -170,6 +185,7 @@
     <div class="tab" onclick="switchTab('approved')">已通过</div>
     <div class="tab" onclick="switchTab('rejected')">已驳回</div>
     <div class="tab" onclick="switchTab('users')">用户管理</div>
+    <div class="tab" onclick="switchTab('blacklist')">黑名单</div>
     <div class="tab" onclick="switchTab('settings')">设置</div>
 </div>
 
@@ -193,8 +209,33 @@
     <div id="users-list"><div class="empty">加载中...</div></div>
 </div>
 
+<!-- 黑名单 -->
+<div id="tab-blacklist" class="tab-content">
+    <div style="padding:12px 12px 6px;">
+        <div style="display:flex;gap:8px;">
+            <input class="inp" id="bl-tg-input" type="number" placeholder="输入 Telegram ID 拉黑" style="flex:1;">
+            <button class="save-btn" style="flex:0 0 auto;margin:0;padding:10px 14px;font-size:13px;" onclick="blacklistManual()">拉黑</button>
+        </div>
+    </div>
+    <div id="blacklist-list"><div class="empty">加载中...</div></div>
+</div>
+
 <!-- 设置 -->
 <div id="tab-settings" class="tab-content">
+    <!-- 小程序名称 -->
+    <div class="settings-section">
+        <div class="settings-title">🌟 小程序品牌</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">小程序名称</div>
+            <input class="inp" id="app-name-input" placeholder="如：星搭 StarMatch">
+            <div class="section-label" style="margin-top:10px;">价格单位</div>
+            <input class="inp" id="price-unit-input" placeholder="如：P 或 元">
+            <div class="section-label" style="margin-top:10px;">管理员联系（Telegram 用户名，不含@）</div>
+            <input class="inp" id="admin-contact-input" placeholder="如：yourname">
+            <button class="save-btn" style="margin-top:8px;" onclick="saveBranding()">保存品牌设置</button>
+        </div>
+    </div>
+
     <!-- 表单字段开关 -->
     <div class="settings-section" id="field-settings">
         <div class="settings-title">📋 上传表单字段配置</div>
@@ -254,7 +295,7 @@
 
     function switchTab(name) {
         document.querySelectorAll('.tab').forEach((t,i) => {
-            const names=['pending','approved','rejected','users','settings'];
+            const names=['pending','approved','rejected','users','blacklist','settings'];
             t.classList.toggle('active', names[i]===name);
         });
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -263,6 +304,7 @@
         else if (name==='approved') loadProfiles(1, 'approved-list');
         else if (name==='rejected') loadProfiles(2, 'rejected-list');
         else if (name==='users') loadUsers();
+        else if (name==='blacklist') loadBlacklist();
         else if (name==='settings') loadSettings();
     }
 
@@ -272,16 +314,25 @@
 
     function buildReviewCard(p, showActions) {
         const photo = p.photos && p.photos.length ? `<img class="review-thumb" src="${p.photos[0]}" onerror="this.style.display='none'">` : '<div class="review-thumb-placeholder">📷</div>';
+        const pinLabels = ['不置顶','📌 长久置顶','🔄 流动置顶'];
+        const pinColors = ['pin-none','pin-perm','pin-rot'];
+        const pinActions = p.is_approved===1 ? `<div style="padding:0 12px 6px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--hint);">置顶：</span>
+            ${[0,1,2].map(t=>`<button class="pin-btn ${pinColors[t]} ${(p.pin_type||0)===t?'ring':''}" style="${(p.pin_type||0)===t?'outline:2px solid currentColor;outline-offset:1px;':''}" onclick="setPin(${p.id},${t})">${pinLabels[t]}</button>`).join('')}
+        </div>` : '';
         const actions = showActions ? `<div class="review-actions">
             <button class="btn-approve" onclick="approve(${p.id})">✓ 通过</button>
             <button class="btn-reject" onclick="reject(${p.id})">✗ 驳回</button>
             <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
-        </div>` : `<div style="padding:0 12px 12px;display:flex;gap:8px;">
-            <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
-            ${p.is_approved===1 ? `<button style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--orange-light);color:var(--orange);font-size:14px;cursor:pointer;" onclick="toggleVerify(${p.id}, ${p.is_verified})">
-                ${p.is_verified ? '取消认证' : '✓ 设为认证'}
-            </button>` : ''}
-            <button style="padding:10px 14px;border-radius:10px;border:none;background:#FFE8F0;color:#E63E6D;font-size:13px;cursor:pointer;" onclick="deleteProfile(${p.id})">删除</button>
+        </div>` : `<div style="padding:0 12px 12px;">
+            ${pinActions}
+            <div style="display:flex;gap:8px;margin-top:4px;">
+                <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
+                ${p.is_approved===1 ? `<button style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--orange-light);color:var(--orange);font-size:14px;cursor:pointer;" onclick="toggleVerify(${p.id}, ${p.is_verified})">
+                    ${p.is_verified ? '取消认证' : '✓ 设为认证'}
+                </button>` : ''}
+                <button style="padding:10px 14px;border-radius:10px;border:none;background:#FFE8F0;color:#E63E6D;font-size:13px;cursor:pointer;" onclick="showDeleteMenu(${p.id}, '${p.tg_id||''}')">删除▾</button>
+            </div>
         </div>`;
         return `<div class="review-card" id="card-${p.id}">
             <div class="review-card-header">
@@ -385,6 +436,18 @@
         fetch(`/api/admin/settings?tg_id=${TG_ID}`)
             .then(r=>r.json())
             .then(data=>{
+                // Branding
+                const appNameEl = document.getElementById('app-name-input');
+                const priceUnitEl = document.getElementById('price-unit-input');
+                const adminContactEl = document.getElementById('admin-contact-input');
+                if (appNameEl) appNameEl.value = data.app_name || '';
+                if (priceUnitEl) priceUnitEl.value = data.price_unit || '';
+                if (adminContactEl) adminContactEl.value = data.admin_contact || '';
+
+                // Verify desc
+                const vdEl = document.getElementById('verify-desc-input');
+                if (vdEl) vdEl.value = data.verify_description || '';
+
                 // Form fields
                 const fields = data.form_fields || {};
                 const FIELD_LABELS = {name:'姓名',price:'价格',region:'地区',district:'区域',category:'分类',tags:'标签',contact:'联系方式',description:'简介',photos:'照片'};
@@ -407,6 +470,16 @@
                 const noticeEl = document.getElementById('notice-input');
                 noticeEl.value = data.notice || '';
             });
+    }
+
+    function saveBranding() {
+        const appName = document.getElementById('app-name-input').value.trim();
+        const priceUnit = document.getElementById('price-unit-input').value.trim();
+        const adminContact = document.getElementById('admin-contact-input').value.trim();
+        fetch('/api/admin/settings', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, app_name:appName, price_unit:priceUnit, admin_contact:adminContact})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 品牌设置已保存':'保存失败'); });
     }
 
     const fieldState = {};
@@ -444,6 +517,81 @@
             method:'POST', headers:{'Content-Type':'application/json'},
             body:JSON.stringify({tg_id:TG_ID, verify_description:val})
         }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 已保存':'保存失败'); });
+    }
+
+    function setPin(id, pinType) {
+        const labels = ['不置顶','长久置顶','流动置顶'];
+        fetch(`/api/admin/pin/${id}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, pin_type:pinType})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('✅ 置顶设置：'+labels[pinType]); switchTab('approved'); }
+            else toast('操作失败');
+        });
+    }
+
+    function showDeleteMenu(id, tgId) {
+        const choice = confirm(`确认删除该资料？\n\n点击「确定」仅删除\n点击「取消」后可选删除+拉黑`);
+        if (choice) {
+            deleteProfile(id, false);
+        } else {
+            if (confirm(`是否同时拉黑上传者？\nTG ID: ${tgId}\n（拉黑后该用户无法继续投稿）`)) {
+                deleteProfile(id, true);
+            }
+        }
+    }
+
+    function deleteProfile(id, withBlacklist) {
+        fetch(`/api/admin/profile/${id}`, {
+            method:'DELETE', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, blacklist: !!withBlacklist})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') {
+                toast(withBlacklist ? '已删除并拉黑用户' : '已删除');
+                removeCard(id);
+            }
+        });
+    }
+
+    function loadBlacklist() {
+        const el = document.getElementById('blacklist-list');
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/blacklisted_users?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                const list = data.blacklisted_users || [];
+                if (!list.length) { el.innerHTML='<div class="empty">黑名单为空</div>'; return; }
+                el.innerHTML = list.map(u => `<div class="blacklist-card">
+                    <div class="bl-info">
+                        <div class="bl-name">TG ID: ${u.tg_id}</div>
+                        <div class="bl-meta">拉黑时间：${u.date||'未知'}</div>
+                    </div>
+                    <button style="padding:8px 12px;border-radius:8px;border:none;background:#FFE8F0;color:#E63E6D;font-size:12px;cursor:pointer;" onclick="unblacklist('${u.tg_id}')">解除</button>
+                </div>`).join('');
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function blacklistManual() {
+        const tid = document.getElementById('bl-tg-input').value.trim();
+        if (!tid) { toast('请输入 Telegram ID'); return; }
+        fetch('/api/admin/blacklist_user', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, target_tg_id:tid})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('✅ 已拉黑'); document.getElementById('bl-tg-input').value=''; loadBlacklist(); }
+            else toast('操作失败: '+(d.message||''));
+        });
+    }
+
+    function unblacklist(tid) {
+        if (!confirm('确认解除拉黑？')) return;
+        fetch(`/api/admin/blacklist_user/${tid}`, {
+            method:'DELETE', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('已解除拉黑'); loadBlacklist(); }
+            else toast('操作失败');
+        });
     }
 
     // 初始加载

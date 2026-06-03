@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>{% if is_edit %}修改资料{% else %}上传资料{% endif %}</title>
+    <title>星搭 StarMatch - {% if is_edit %}修改资料{% else %}上传投稿{% endif %}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
@@ -66,8 +66,32 @@
         }
         .tag-hint { font-size: 11px; color: var(--hint); margin-top: 6px; }
 
-        /* 照片上传 */
-        .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        /* 步骤指引 */
+        .step-guide {
+            display: flex; align-items: center; padding: 14px 12px;
+            background: linear-gradient(135deg, #FFF3E0, #FFF8F0);
+            border-bottom: 1px solid rgba(255,106,0,0.15); gap: 0;
+        }
+        .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .step-num {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--orange); color: #fff;
+            font-size: 13px; font-weight: 800;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .step-num.done { background: #4CAF50; }
+        .step-num.active { box-shadow: 0 0 0 4px rgba(255,106,0,0.2); }
+        .step-label { font-size: 11px; font-weight: 600; color: var(--text); text-align: center; }
+        .step-arrow { font-size: 14px; color: var(--hint); margin: 0 2px; margin-bottom: 10px; }
+
+        /* 提示横幅 */
+        .tip-banner {
+            background: linear-gradient(135deg, #FFF3E0, #FFEBE0);
+            border-left: 3px solid var(--orange);
+            padding: 10px 14px; margin: 10px; border-radius: 10px;
+            font-size: 13px; color: #7A3000; line-height: 1.6;
+        }
+        .tip-banner strong { display: block; margin-bottom: 4px; font-size: 14px; }
         .photo-cell {
             aspect-ratio: 3/4; border-radius: 10px; overflow: hidden;
             position: relative; background: var(--bg); border: 1.5px solid var(--border);
@@ -131,8 +155,12 @@
 <div id="success-screen">
     <div class="emoji">🎉</div>
     <h2>提交成功！</h2>
-    <p>您的资料已提交审核，管理员审核通过后将会显示在首页。</p>
-    <button class="back-home" onclick="location.href='/?tg_id='+getTgId()">返回首页</button>
+    <p>您的资料已提交审核<br>管理员将在 1-24 小时内审核</p>
+    <p style="margin-top:8px;font-size:13px;color:var(--hint);">如需加急或有疑问，可联系管理员</p>
+    <a id="contact-admin-btn" href="{% if admin_contact %}https://t.me/{{ admin_contact }}{% else %}#{% endif %}" {% if admin_contact %}target="_blank"{% endif %} style="margin-top:12px;display:inline-block;padding:12px 28px;border-radius:12px;background:#229ED9;color:#fff;font-size:14px;font-weight:700;text-decoration:none;">
+        📩 联系管理员
+    </a>
+    <button class="back-home" style="margin-top:12px;" onclick="location.href='/?tg_id='+getTgId()">返回首页</button>
 </div>
 
 <!-- 顶部 -->
@@ -142,8 +170,34 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
         </svg>
     </button>
-    <span class="top-title">{% if is_edit %}修改我的资料{% else %}上传我的资料{% endif %}</span>
+    <span class="top-title">{% if is_edit %}✏️ 修改我的资料{% else %}⭐ 投稿 · 星搭{% endif %}</span>
 </div>
+
+{% if not is_edit %}
+<!-- 步骤指引 -->
+<div class="step-guide">
+    <div class="step-item">
+        <div class="step-num active">1</div>
+        <div class="step-label">填写资料</div>
+    </div>
+    <div class="step-arrow">›</div>
+    <div class="step-item">
+        <div class="step-num" style="background:#ddd;color:#999;">2</div>
+        <div class="step-label">上传照片</div>
+    </div>
+    <div class="step-arrow">›</div>
+    <div class="step-item">
+        <div class="step-num" style="background:#ddd;color:#999;">3</div>
+        <div class="step-label">提交审核</div>
+    </div>
+</div>
+
+<!-- 提示横幅 -->
+<div class="tip-banner">
+    <strong>📋 投稿说明</strong>
+    请按照下方表单如实填写资料，上传清晰照片后点击提交。审核通过后您的资料将显示在首页，一般需要 1-24 小时。
+</div>
+{% endif %}
 
 <form id="profile-form">
 

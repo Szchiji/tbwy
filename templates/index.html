@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>首页</title>
+    <title>{{ app_name or '星搭 StarMatch' }}</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -149,6 +149,23 @@
             padding: 2px 6px 2px 4px;
             border-bottom-right-radius: 8px;
             z-index: 2;
+        }
+        /* 置顶角标 */
+        .pin-badge-perm {
+            position: absolute; top: 0; right: 0;
+            background: #E63E6D;
+            color: #fff; font-size: 10px; font-weight: 700;
+            padding: 2px 6px;
+            border-bottom-left-radius: 8px;
+            z-index: 3;
+        }
+        .pin-badge-rot {
+            position: absolute; top: 0; right: 0;
+            background: #7B2FBE;
+            color: #fff; font-size: 10px; font-weight: 700;
+            padding: 2px 6px;
+            border-bottom-left-radius: 8px;
+            z-index: 3;
         }
         /* 价格角标 */
         .price-badge {
@@ -299,10 +316,12 @@
                 : `<div class="card-img-placeholder"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" width="36" height="36"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>`;
             const tags = (p.tags||[]).slice(0,3).map(t=>`<span class="tag-pill ${tagClass(t)}">${t}</span>`).join('');
             const loc = [p.region||'', p.district||''].filter(Boolean).join(' ');
+            const pinBadge = p.pin_type===1 ? '<span class="pin-badge-perm">📌 置顶</span>' : (p.pin_type===2 ? '<span class="pin-badge-rot">🔄 精选</span>' : '');
             return `<div class="profile-card" onclick="goDetail(${p.id})">
                 <div class="card-img-wrap">
                     ${imgHTML}
                     ${p.is_verified ? '<span class="hot-badge">重磅</span>' : ''}
+                    ${pinBadge}
                     ${p.price ? `<span class="price-badge">💰 ${p.price}P</span>` : ''}
                     ${loc ? `<span class="dist-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>${loc}</span>` : ''}
                 </div>
@@ -419,11 +438,7 @@
 <!-- 顶部栏 -->
 <div class="top-bar">
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px 6px;">
-        <button class="loc-btn" onclick="alert('城市选择功能开发中')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
-            全国
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
-        </button>
+        <span style="font-size:15px;font-weight:800;color:var(--orange);letter-spacing:0.5px;white-space:nowrap;">⭐ 星搭</span>
         <div class="search-box">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2.5">
                 <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -468,6 +483,55 @@
 
 <!-- 卡片网格 -->
 <main>
+{% if pinned_profiles %}
+<div style="padding:6px 8px 0;font-size:11px;color:var(--hint);font-weight:600;letter-spacing:0.5px;">📌 置顶内容</div>
+<div class="card-grid" id="pinned-grid">
+    {% for p in pinned_profiles %}
+    {% set photo = p.photos[0] if p.photos else '' %}
+    {% set loc = [p.region or '', p.district or ''] | select | join(' ') %}
+    <div class="profile-card" data-pid="{{ p.id }}">
+        <div class="card-img-wrap">
+            {% if photo %}
+            <div class="shimmer"></div>
+            <img data-src="{{ photo }}" class="card-lazy" alt="">
+            {% else %}
+            <div class="card-img-placeholder">
+                <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" width="36" height="36">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 20.25h18"/>
+                </svg>
+            </div>
+            {% endif %}
+            {% if p.is_verified %}<span class="hot-badge">重磅</span>{% endif %}
+            {% if p.pin_type == 1 %}<span class="pin-badge-perm">📌 置顶</span>
+            {% elif p.pin_type == 2 %}<span class="pin-badge-rot">🔄 精选</span>{% endif %}
+            {% if p.price %}<span class="price-badge">💰 {{ p.price }}P</span>{% endif %}
+            {% if loc %}<span class="dist-badge">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                {{ loc[:15] }}{% if loc|length > 15 %}...{% endif %}
+            </span>{% endif %}
+        </div>
+        <div class="card-info">
+            <div class="card-name">{{ p.name }}</div>
+            <div class="badge-row">
+                <span class="num-badge">编号 {{ p.number }}</span>
+                {% if p.is_verified %}<span class="verified-badge">✓ 已认证</span>{% endif %}
+            </div>
+            {% if loc %}<div class="card-loc">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#aaa"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                {{ loc[:20] }}{% if loc|length > 20 %}...{% endif %}
+            </div>{% endif %}
+            <div class="tag-list">
+                {% for tag in p.tags[:3] %}
+                <span class="tag-pill tag-pink">{{ tag }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div style="padding:4px 8px 0;"><hr style="border:none;border-top:1px dashed var(--border);"></div>
+{% endif %}
+
 {% if profiles %}
 <div class="card-grid" id="card-grid">
     {% for p in profiles %}
@@ -486,6 +550,8 @@
             </div>
             {% endif %}
             {% if p.is_verified %}<span class="hot-badge">重磅</span>{% endif %}
+            {% if p.pin_type == 1 %}<span class="pin-badge-perm">📌 置顶</span>
+            {% elif p.pin_type == 2 %}<span class="pin-badge-rot">🔄 精选</span>{% endif %}
             {% if p.price %}<span class="price-badge">💰 {{ p.price }}P</span>{% endif %}
             {% if loc %}<span class="dist-badge">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
