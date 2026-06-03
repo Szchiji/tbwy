@@ -253,6 +253,7 @@
     </nav>
 
     <script>
+        window.BOT_USERNAME = '{{ bot_username | safe }}';
         (function() {
             const tg = window.Telegram && window.Telegram.WebApp;
             if (tg && tg.BackButton) {
