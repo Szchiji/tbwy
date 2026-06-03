@@ -136,8 +136,21 @@
                 </svg>
             </div>
             <h1 class="text-2xl font-black mb-2" style="background:linear-gradient(135deg,#a78bfa,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">自助投稿</h1>
+            {% if submission_notice %}
+            <p class="text-sm leading-relaxed" style="color:var(--tg-hint)">{{ submission_notice }}</p>
+            {% else %}
             <p class="text-sm leading-relaxed" style="color:var(--tg-hint)">通过 Telegram 机器人向 Matrix Hub 投递你的精彩内容<br>审核通过后将在平台展示</p>
+            {% endif %}
         </div>
+
+        {% if not enable_submissions %}
+        <!-- 投稿已关闭 -->
+        <div class="step-card p-8 text-center mb-6 fade-up-2">
+            <div class="text-4xl mb-3">🚫</div>
+            <p class="text-sm font-bold mb-1" style="color:var(--tg-text)">投稿通道暂时关闭</p>
+            <p class="text-xs" style="color:var(--tg-hint)">管理员已暂停接收投稿，请稍后再试。</p>
+        </div>
+        {% else %}
 
         <!-- 投稿步骤 -->
         <h2 class="text-xs font-bold uppercase tracking-widest mb-3 fade-up-2" style="color:var(--tg-hint)">投稿步骤</h2>
@@ -216,7 +229,10 @@
                 立即前往投稿
             </a>
             <p class="text-xs mt-3" style="color:var(--tg-hint)">点击将跳转至 Telegram 机器人</p>
+            <a href="/my-submissions?user_id={{ user_id }}" class="inline-block mt-4 text-xs" style="color:var(--accent)" onclick="haptic('light')">📋 查看我的投稿记录 →</a>
         </div>
+
+        {% endif %}{# end enable_submissions #}
 
     </div>
 

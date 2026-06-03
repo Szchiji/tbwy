@@ -21,23 +21,14 @@
         .list-item:last-child { border-bottom:none; }
         .list-item:active { background:rgba(167,139,250,0.05); }
         .logo-text { background:linear-gradient(135deg,#a78bfa,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-        .avatar-ring {
-            background: linear-gradient(135deg,#a78bfa,#38bdf8);
-            padding: 2px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        .avatar-inner {
-            background: var(--bg);
-            border-radius: 50%;
-            width: 64px; height: 64px;
-            display: flex; align-items: center; justify-content: center;
-        }
+        .avatar-ring { background:linear-gradient(135deg,#a78bfa,#38bdf8); padding:2px; border-radius:50%; display:inline-block; }
+        .avatar-inner { background:var(--bg); border-radius:50%; width:64px;height:64px; display:flex;align-items:center;justify-content:center; overflow:hidden; }
         @keyframes fade-in { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         .fade-in { animation: fade-in .4s ease both; }
         .fade-in-2 { animation: fade-in .4s .08s ease both; }
         .fade-in-3 { animation: fade-in .4s .16s ease both; }
         .fade-in-4 { animation: fade-in .4s .24s ease both; }
+        .tg-badge { background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.25); color:#38bdf8; border-radius:20px; font-size:11px; font-weight:700; padding:2px 8px; display:inline-block; }
     </style>
     <script>
         (function() {
@@ -60,16 +51,27 @@
     <div class="px-4 pt-8 pb-6 fade-in">
         <div class="flex items-center gap-4">
             <div class="avatar-ring">
-                <div class="avatar-inner">
+                <div class="avatar-inner" id="avatarContainer">
                     <svg class="w-8 h-8" style="color:var(--accent)" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                     </svg>
                 </div>
             </div>
             <div>
-                <div class="logo-text text-lg font-black tracking-widest">MATRIX HUB</div>
-                <div class="text-xs font-mono mt-0.5" style="color:var(--tg-hint)" id="uidDisplay">…</div>
-                <div class="text-xs mt-0.5" style="color:var(--tg-hint)" id="joinDisplay">本地用户</div>
+                <div class="logo-text text-lg font-black tracking-widest" id="displayName">
+                    {% if tg_user %}{{ tg_user['first_name'] }}{% if tg_user['last_name'] %} {{ tg_user['last_name'] }}{% endif %}{% else %}MATRIX HUB{% endif %}
+                </div>
+                <div class="flex items-center gap-2 mt-0.5">
+                    {% if tg_user and tg_user['username'] %}
+                    <span class="tg-badge">@{{ tg_user['username'] }}</span>
+                    {% endif %}
+                    <span class="text-xs font-mono" style="color:var(--tg-hint)" id="uidDisplay">
+                        {% if tg_user %}ID: {{ tg_user['tg_id'] }}{% else %}…{% endif %}
+                    </span>
+                </div>
+                <div class="text-xs mt-0.5" style="color:var(--tg-hint)" id="joinDisplay">
+                    {% if tg_user %}加入于 {{ tg_user['registered_at'] }}{% else %}本地用户{% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -77,20 +79,78 @@
     <div class="px-4 max-w-xl mx-auto">
 
         <!-- 数据统计 -->
-        <div class="grid grid-cols-3 gap-3 mb-5 fade-in-2">
-            <div class="stat-card rounded-2xl p-4 text-center">
-                <div class="text-2xl font-black" style="color:var(--accent)" id="likeCount">0</div>
-                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">点过赞</div>
+        <div class="grid grid-cols-4 gap-2 mb-5 fade-in-2">
+            <div class="stat-card rounded-2xl p-3 text-center">
+                <div class="text-xl font-black" style="color:var(--accent)" id="likeCount">0</div>
+                <div class="text-[10px] mt-0.5" style="color:var(--tg-hint)">点赞</div>
             </div>
-            <div class="stat-card rounded-2xl p-4 text-center">
-                <div class="text-2xl font-black text-amber-400">{{ favorites|length }}</div>
-                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">收藏</div>
+            <div class="stat-card rounded-2xl p-3 text-center">
+                <div class="text-xl font-black text-amber-400">{{ favorites|length }}</div>
+                <div class="text-[10px] mt-0.5" style="color:var(--tg-hint)">收藏</div>
             </div>
-            <div class="stat-card rounded-2xl p-4 text-center">
-                <div class="text-2xl font-black text-red-400" id="blacklistCount">0</div>
-                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">已拉黑</div>
+            <div class="stat-card rounded-2xl p-3 text-center">
+                <div class="text-xl font-black text-emerald-400">{{ submissions|length }}</div>
+                <div class="text-[10px] mt-0.5" style="color:var(--tg-hint)">投稿</div>
+            </div>
+            <div class="stat-card rounded-2xl p-3 text-center">
+                <div class="text-xl font-black text-red-400" id="blacklistCount">0</div>
+                <div class="text-[10px] mt-0.5" style="color:var(--tg-hint)">屏蔽</div>
             </div>
         </div>
+
+        <!-- 星光值信用卡片 -->
+        {% if tg_user %}
+        <div class="section-card rounded-2xl p-4 mb-5 fade-in-2" id="creditCard" style="display:none">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-bold" style="color:var(--tg-text)">⭐ 星光值</span>
+                <span id="tierBadge" class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.3)"></span>
+            </div>
+            <div class="flex items-end gap-2 mb-2">
+                <span id="creditScore" class="text-3xl font-black" style="color:var(--accent)">—</span>
+                <span class="text-xs mb-1" style="color:var(--tg-hint)">星光值</span>
+            </div>
+            <!-- 进度条：到下一等级 -->
+            <div id="progressWrap" style="display:none" class="mb-3">
+                <div class="flex justify-between text-[10px] mb-1" style="color:var(--tg-hint)">
+                    <span>距 <span id="nextTierName"></span></span>
+                    <span><span id="neededPts"></span> 点</span>
+                </div>
+                <div class="w-full rounded-full h-1.5" style="background:rgba(167,139,250,0.12)">
+                    <div id="progressBar" class="h-1.5 rounded-full" style="background:linear-gradient(90deg,#a78bfa,#38bdf8);width:0%;transition:width .6s"></div>
+                </div>
+            </div>
+            <!-- 近期变动 -->
+            <div id="creditHistoryWrap" style="display:none">
+                <div class="text-[10px] mb-1.5 font-semibold" style="color:var(--tg-hint)">近期变动</div>
+                <div id="creditHistoryList" class="space-y-1"></div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 我的投稿 -->
+        {% if submissions %}
+        <div class="section-card rounded-2xl overflow-hidden mb-4 fade-in-2">
+            <div class="px-4 py-3 flex items-center justify-between border-b" style="border-color:var(--border)">
+                <span class="text-sm font-bold" style="color:var(--tg-text)">我的投稿</span>
+                <a href="/my-submissions?user_id={{ user_id }}" class="text-xs" style="color:var(--accent)" onclick="haptic('light')">查看全部 →</a>
+            </div>
+            {% for post in submissions[:3] %}
+            <a href="/post/{{ post.id }}?user_id={{ user_id }}" class="list-item px-4 py-3 flex items-center gap-3 block" onclick="haptic('light')">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        {% if post.is_approved == 0 %}
+                        <span class="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)">⏳ 待审核</span>
+                        {% else %}
+                        <span class="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded" style="background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3)">✅ 已发布</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-sm line-clamp-1" style="color:var(--tg-text)">{{ post.text or '查看详情' }}</div>
+                    <div class="text-xs mt-0.5" style="color:var(--tg-hint)">{{ post.date }} · ♥ {{ post.likes or 0 }}</div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         <!-- 我的收藏 -->
         <div class="section-card rounded-2xl overflow-hidden mb-4 fade-in-3">
@@ -170,12 +230,56 @@
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
         }
+        function getInitData() {
+            try { return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || ''; } catch(e) { return ''; }
+        }
+
+        // Auto Telegram login — register TG user with server on every visit
+        (function() {
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (!tg || !tg.initDataUnsafe || !tg.initDataUnsafe.user) return;
+                const u = tg.initDataUnsafe.user;
+                fetch('/api/user/init', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        tg_id: u.id,
+                        username: u.username || '',
+                        first_name: u.first_name || '',
+                        last_name: u.last_name || '',
+                        photo_url: u.photo_url || '',
+                        init_data: tg.initData || ''
+                    })
+                }).then(r => r.json()).then(data => {
+                    if (data.user_id) {
+                        // Ensure URL has correct user_id
+                        const params = new URLSearchParams(window.location.search);
+                        if (params.get('user_id') !== data.user_id) {
+                            params.set('user_id', data.user_id);
+                            window.history.replaceState({}, '', window.location.pathname + '?' + params.toString());
+                        }
+                    }
+                    // Show TG photo if available
+                    if (u.photo_url) {
+                        const ac = document.getElementById('avatarContainer');
+                        if (ac) ac.innerHTML = `<img src="${u.photo_url}" class="w-full h-full object-cover" alt="">`;
+                    }
+                    // Update display name if not already server-rendered
+                    const dn = document.getElementById('displayName');
+                    if (dn && dn.textContent.trim() === 'MATRIX HUB') {
+                        dn.textContent = u.first_name + (u.last_name ? ' ' + u.last_name : '');
+                    }
+                }).catch(() => {});
+            } catch(e) {}
+        })();
+
         const uid = getUserId();
         const el = document.getElementById('uidDisplay');
-        if (el) el.textContent = 'ID: ' + uid.substring(0,16) + '…';
+        if (el && el.textContent.trim() === '…') el.textContent = 'ID: ' + uid.substring(0,16) + '…';
 
         const joinEl = document.getElementById('joinDisplay');
-        if (joinEl) {
+        if (joinEl && joinEl.textContent.trim() === '本地用户') {
             let joinDate = localStorage.getItem('m_join_date');
             if (!joinDate) {
                 joinDate = new Date().toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'});
@@ -193,10 +297,52 @@
             haptic('medium');
             if (!confirm('确定要清除所有本地数据吗？包括点赞、收藏、拉黑记录。')) return;
             haptic('error');
-            ['m_liked','m_blacklisted','m_favorites'].forEach(k => localStorage.removeItem(k));
+            ['m_liked','m_blacklisted','m_favorites','user_id','m_join_date'].forEach(k => localStorage.removeItem(k));
             alert('数据已清除');
             location.reload();
         }
+
+        // ── 星光值信用卡片 ────────────────────────────────────────────
+        (function() {
+            const userId = getUserId();
+            if (!userId.startsWith('tg_')) return;
+            fetch('/api/credit?user_id=' + encodeURIComponent(userId))
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status !== 'ok') return;
+                    const card = document.getElementById('creditCard');
+                    if (!card) return;
+                    card.style.display = '';
+                    document.getElementById('creditScore').textContent = d.score;
+                    document.getElementById('tierBadge').textContent = d.tier.icon + ' ' + d.tier.name;
+                    // Progress bar to next tier
+                    if (d.next_tier) {
+                        const wrap = document.getElementById('progressWrap');
+                        wrap.style.display = '';
+                        document.getElementById('nextTierName').textContent = d.next_tier.icon + ' ' + d.next_tier.name;
+                        document.getElementById('neededPts').textContent = d.next_tier.needed;
+                        const range = d.next_tier.min_score - d.tier.min_score;
+                        const gained = d.score - d.tier.min_score;
+                        const pct = range > 0 ? Math.min(100, Math.round(gained / range * 100)) : 100;
+                        setTimeout(() => { document.getElementById('progressBar').style.width = pct + '%'; }, 100);
+                    }
+                    // Recent history
+                    if (d.history && d.history.length) {
+                        const histWrap = document.getElementById('creditHistoryWrap');
+                        histWrap.style.display = '';
+                        const list = document.getElementById('creditHistoryList');
+                        list.innerHTML = d.history.slice().reverse().map(h => {
+                            const sign = h.delta >= 0 ? '+' : '';
+                            const color = h.delta >= 0 ? '#4ade80' : '#f87171';
+                            return `<div class="flex justify-between text-xs" style="color:var(--tg-hint)">
+                                <span>${h.desc}</span>
+                                <span style="color:${color};font-weight:700">${sign}${h.delta}</span>
+                            </div>`;
+                        }).join('');
+                    }
+                }).catch(() => {});
+        })();
     </script>
 </body>
 </html>
+
