@@ -307,15 +307,29 @@ def webhook():
                 return 'OK'
             
             if txt == '/sync':
-                bot.send_message(MY_CHAT_ID, "🔄 正在同步频道...")
-                history = bot.get_chat_history(CHANNEL_ID, limit=50)
-                for h in history:
-                    path, thumbnail = download_media(h)
-                    if path:
-                        with get_db() as conn:
-                            conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
-                                         (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
-                bot.send_message(MY_CHAT_ID, "✅ 同步完成")
+                bot.send_message(MY_CHAT_ID, "🔄 正在同步频道未读消息...")
+                count = 0
+                try:
+                    # 临时移除 Webhook，通过 getUpdates 获取未读消息
+                    bot.remove_webhook()
+                    time.sleep(1)
+                    updates = bot.get_updates(limit=100, allowed_updates=['channel_post'])
+                    for update in updates:
+                        h = update.channel_post
+                        if h and str(h.chat.id) == str(CHANNEL_ID):
+                            path, thumbnail = download_media(h)
+                            if path:
+                                with get_db() as conn:
+                                    conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
+                                                 (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
+                                count += 1
+                    bot.send_message(MY_CHAT_ID, f"✅ 同步完成，共同步 {count} 条新内容")
+                except Exception as e:
+                    bot.send_message(MY_CHAT_ID, f"❌ 同步失败: {e}")
+                finally:
+                    # 重新注册 Webhook
+                    if BASE_URL:
+                        bot.set_webhook(url=f"{BASE_URL}/webhook")
                 return 'OK'
 
         # 3. 黑名单拦截
