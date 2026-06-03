@@ -369,33 +369,96 @@ def webhook():
     return 'OK'
 
 # --- 路由渲染 ---
+def _build_post_query_conditions(type_filter, sort):
+    """根据类型过滤和排序参数构建 SQL 片段（均来自服务端枚举，非用户原始输入）。"""
+    if type_filter == 'video':
+        type_condition = " AND (p.first_media LIKE '%.mp4' OR p.first_media LIKE '%.mov')"
+    elif type_filter == 'image':
+        type_condition = " AND (p.first_media LIKE '%.jpg' OR p.first_media LIKE '%.jpeg'" \
+                         " OR p.first_media LIKE '%.png' OR p.first_media LIKE '%.gif'" \
+                         " OR p.first_media LIKE '%.webp')"
+    else:
+        type_condition = ""
+    order_clause = "p.likes DESC, p.id DESC" if sort == 'hot' else "p.id DESC"
+    return type_condition, order_clause
+
 @app.route('/')
 def index():
     q = request.args.get('q', '')
     user_id = request.args.get('user_id', 'anonymous')
     page = request.args.get('page', 1, type=int)
+    type_filter = request.args.get('type', '')
+    sort = request.args.get('sort', 'latest')
     per_page = 20
     offset = (page - 1) * per_page
+    type_condition, order_clause = _build_post_query_conditions(type_filter, sort)
     
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
-        # 分组查询：如果是媒体组只显示一张，排除用户拉黑的内容
-        sql = """SELECT p.* FROM posts p 
+        # 分组查询：如果是媒体组只显示一张，排除用户拉黑的内容，附带评论数
+        sql = f"""SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+                 FROM posts p 
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
+                 {type_condition}
                  GROUP BY COALESCE(p.media_group_id, p.id) 
-                 ORDER BY p.id DESC
+                 ORDER BY {order_clause}
                  LIMIT ? OFFSET ?"""
         posts = conn.execute(sql, (f'%{q}%', user_id, per_page, offset)).fetchall()
         
         # 获取总数用于分页
-        count_sql = """SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) as total FROM posts p 
+        count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
                        WHERE p.is_approved=1 AND p.text LIKE ? 
-                       AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)"""
+                       AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
+                       {type_condition}"""
         total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
         
     return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", 
-                         q=q, user_id=user_id, page=page, total_pages=(total + per_page - 1) // per_page)
+                         q=q, user_id=user_id, page=page,
+                         total_pages=(total + per_page - 1) // per_page,
+                         type_filter=type_filter, sort=sort)
+
+@app.route('/api/posts')
+def api_posts():
+    """JSON 接口，供前端无限滚动使用。"""
+    q = request.args.get('q', '')
+    user_id = request.args.get('user_id', 'anonymous')
+    page = request.args.get('page', 1, type=int)
+    type_filter = request.args.get('type', '')
+    sort = request.args.get('sort', 'latest')
+    per_page = 20
+    offset = (page - 1) * per_page
+    type_condition, order_clause = _build_post_query_conditions(type_filter, sort)
+
+    with get_db() as conn:
+        sql = f"""SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
+                 FROM posts p 
+                 WHERE p.is_approved=1 AND p.text LIKE ? 
+                 AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
+                 {type_condition}
+                 GROUP BY COALESCE(p.media_group_id, p.id) 
+                 ORDER BY {order_clause}
+                 LIMIT ? OFFSET ?"""
+        posts = conn.execute(sql, (f'%{q}%', user_id, per_page, offset)).fetchall()
+
+        count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
+                       WHERE p.is_approved=1 AND p.text LIKE ? 
+                       AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
+                       {type_condition}"""
+        total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
+
+    total_pages = (total + per_page - 1) // per_page
+    posts_data = [{
+        'id': p['id'],
+        'text': p['text'] or '',
+        'title': p['title'] or '',
+        'date': p['date'] or '',
+        'likes': p['likes'] or 0,
+        'first_media': p['first_media'] or '',
+        'thumbnail': p['thumbnail'] or '',
+        'comment_count': p['comment_count'] or 0,
+    } for p in posts]
+    return jsonify({'posts': posts_data, 'total_pages': total_pages, 'page': page, 'has_more': page < total_pages})
 
 @app.route('/post/<int:post_id>')
 def detail(post_id):
@@ -445,9 +508,13 @@ def comment(post_id):
     # XSS protection: escape HTML content
     if content:
         content = html.escape(content)
-        with get_db() as conn: 
-            conn.execute("INSERT INTO comments (post_id, content, date, user_id) VALUES (?,?,?,?)", 
-                        (post_id, content, datetime.now().strftime("%m-%d %H:%M"), user_id))
+        date_str = datetime.now().strftime("%m-%d %H:%M")
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO comments (post_id, content, date, user_id) VALUES (?,?,?,?)",
+                           (post_id, content, date_str, user_id))
+            new_id = cursor.lastrowid
+        return jsonify({"status": "ok", "id": new_id, "date": date_str})
     return jsonify({"status":"ok"})
 
 @app.route('/api/blacklist/<int:post_id>', methods=['POST'])

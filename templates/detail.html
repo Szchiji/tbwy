@@ -35,6 +35,37 @@
         /* 媒体块 */
         .media-block { background: #000; border: 1px solid rgba(255,255,255,0.04); }
 
+        /* 媒体轮播 */
+        .media-carousel {
+            display: flex;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            gap: 0;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .media-carousel::-webkit-scrollbar { display: none; }
+        .media-slide {
+            flex-shrink: 0;
+            width: 100%;
+            scroll-snap-align: center;
+        }
+        .carousel-dot {
+            width: 6px; height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.25);
+            transition: all 0.25s;
+            cursor: pointer;
+            border: none;
+            padding: 0;
+        }
+        .carousel-dot.active {
+            width: 18px;
+            background: var(--accent);
+        }
+
         /* 正文区 */
         .content-block {
             background: var(--surface);
@@ -99,6 +130,68 @@
         /* 链接样式 */
         .linkify a { color: var(--accent2); text-decoration: none; border-bottom: 1px solid rgba(56,189,248,0.3); }
         .linkify a:hover { border-color: var(--accent2); }
+
+        /* ── Toast 通知 ── */
+        #toast-container {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 8px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(30,30,48,0.95);
+            border: 1px solid rgba(167,139,250,0.3);
+            backdrop-filter: blur(16px);
+            border-radius: 24px;
+            padding: 10px 20px;
+            font-size: 14px;
+            color: #e5e7eb;
+            white-space: nowrap;
+            pointer-events: none;
+            animation: toast-in 0.3s ease both;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        .toast.error { border-color: rgba(239,68,68,0.4); color: #fca5a5; }
+        .toast.success { border-color: rgba(52,211,153,0.4); color: #6ee7b7; }
+        @keyframes toast-in {
+            from { opacity:0; transform:translateY(12px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+
+        /* ── 自定义确认弹窗 ── */
+        .confirm-overlay {
+            position: fixed; inset: 0; z-index: 10001;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            animation: fade-in 0.2s ease both;
+        }
+        .confirm-box {
+            background: #1a1a2e;
+            border: 1px solid rgba(167,139,250,0.3);
+            border-radius: 20px;
+            padding: 24px;
+            width: 280px;
+            text-align: center;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+        }
+        .confirm-box p { font-size: 15px; color: #d1d5db; margin-bottom: 20px; line-height: 1.5; }
+        .confirm-btns { display: flex; gap: 10px; }
+        .confirm-cancel {
+            flex: 1; padding: 10px; border-radius: 12px;
+            background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+            color: #9ca3af; font-size: 14px; cursor: pointer; transition: background 0.15s;
+        }
+        .confirm-cancel:hover { background: rgba(255,255,255,0.1); }
+        .confirm-ok {
+            flex: 1; padding: 10px; border-radius: 12px;
+            background: rgba(167,139,250,0.2); border: 1px solid rgba(167,139,250,0.4);
+            color: var(--accent); font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.15s;
+        }
+        .confirm-ok:hover { background: rgba(167,139,250,0.3); }
+        .confirm-ok.danger {
+            background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #f87171;
+        }
+        .confirm-ok.danger:hover { background: rgba(239,68,68,0.25); }
     </style>
 </head>
 <body class="pb-24">
@@ -145,24 +238,36 @@
         </div>
         {% endif %}
 
-        <!-- 媒体展示 -->
-        <div class="space-y-3 mb-6">
-            {% for m in all_media %}
-            {% if m %}
-            <div class="media-block rounded-2xl overflow-hidden shadow-2xl">
-                {% if m.lower().endswith('.mp4') or m.lower().endswith('.mov') %}
-                    {% set thumb_url = m.replace('.mp4','_thumb.jpg').replace('.MP4','_thumb.jpg').replace('.mov','_thumb.jpg').replace('.MOV','_thumb.jpg') %}
-                    <video src="{{ m }}" poster="{{ thumb_url }}" controls playsinline class="w-full block"></video>
-                {% else %}
-                    <img src="{{ m }}" class="w-full block cursor-zoom-in" onclick="openLightbox('{{ m }}')" alt="">
-                {% endif %}
+        <!-- 媒体展示（轮播） -->
+        {% set media_list = all_media | select | list %}
+        {% if media_list %}
+        <div class="mb-2">
+            <div class="media-carousel" id="mediaCarousel">
+                {% for m in media_list %}
+                <div class="media-slide media-block">
+                    {% if m.lower().endswith('.mp4') or m.lower().endswith('.mov') %}
+                        {% set thumb_url = m.replace('.mp4','_thumb.jpg').replace('.MP4','_thumb.jpg').replace('.mov','_thumb.jpg').replace('.MOV','_thumb.jpg') %}
+                        <video src="{{ m }}" poster="{{ thumb_url }}" controls playsinline class="w-full block"></video>
+                    {% else %}
+                        <img src="{{ m }}" class="w-full block cursor-zoom-in" onclick="openLightbox('{{ m }}')" alt="">
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
+            {% if media_list | length > 1 %}
+            <div class="flex justify-center gap-1.5 mt-3 mb-4" id="carouselDots">
+                {% for m in media_list %}
+                <button class="carousel-dot {% if loop.first %}active{% endif %}" onclick="scrollToSlide({{ loop.index0 }})"></button>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="mb-4"></div>
             {% endif %}
-            {% endfor %}
         </div>
+        {% endif %}
 
         <!-- 正文 -->
-        <div class="content-block p-5 rounded-2xl mb-6 text-[15px] leading-relaxed text-gray-200 whitespace-pre-wrap linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
+        <div class="content-block p-5 rounded-2xl mb-6 text-base leading-7 text-gray-200 whitespace-pre-wrap linkify" id="postContent">{{ post.text or "暂无详细文案说明。" }}</div>
 
         <!-- 操作按钮组 -->
         <div class="grid grid-cols-2 gap-3 mb-3">
@@ -208,7 +313,7 @@
                 </div>
                 {% endfor %}
                 {% if not comments %}
-                <p class="text-center text-gray-600 text-sm py-6">暂无评论，来说第一句话吧 👇</p>
+                <p class="text-center text-gray-600 text-sm py-6" id="noCommentHint">暂无评论，来说第一句话吧 👇</p>
                 {% endif %}
             </div>
         </div>
@@ -227,6 +332,9 @@
         </svg>
     </div>
 
+    <!-- Toast 容器 -->
+    <div id="toast-container"></div>
+
     <script>
         const pid = "{{ post.id }}";
         let isFavorited = {{ 'true' if is_favorited else 'false' }};
@@ -243,27 +351,83 @@
         function getBlacklistedItems() { return JSON.parse(localStorage.getItem('m_blacklisted') || '[]'); }
         function addToBlacklist(id) { let b = getBlacklistedItems(); b.push(id); localStorage.setItem('m_blacklisted', JSON.stringify(b)); }
 
+        // ── Toast ────────────────────────────────────────────────────────────
+        function showToast(msg, type = '') {
+            const c = document.getElementById('toast-container');
+            const t = document.createElement('div');
+            t.className = 'toast' + (type ? ' ' + type : '');
+            t.textContent = msg;
+            c.appendChild(t);
+            setTimeout(() => {
+                t.style.transition = 'opacity 0.3s';
+                t.style.opacity = '0';
+                setTimeout(() => t.remove(), 300);
+            }, 2500);
+        }
+
+        // ── 自定义确认弹窗 ───────────────────────────────────────────────────
+        function showConfirm(msg, onConfirm, danger = false) {
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-overlay';
+            overlay.innerHTML = `<div class="confirm-box">
+                <p>${msg}</p>
+                <div class="confirm-btns">
+                    <button class="confirm-cancel">取消</button>
+                    <button class="confirm-ok${danger ? ' danger' : ''}">确定</button>
+                </div>
+            </div>`;
+            document.body.appendChild(overlay);
+            overlay.querySelector('.confirm-cancel').onclick = () => overlay.remove();
+            overlay.querySelector('.confirm-ok').onclick = () => { overlay.remove(); onConfirm(); };
+        }
+
+        // ── 媒体轮播 ─────────────────────────────────────────────────────────
+        const carousel = document.getElementById('mediaCarousel');
+        const dots = document.querySelectorAll('.carousel-dot');
+        if (carousel && dots.length > 1) {
+            let scrollTimer;
+            carousel.addEventListener('scroll', () => {
+                clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => {
+                    const idx = Math.round(carousel.scrollLeft / carousel.offsetWidth);
+                    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+                }, 50);
+            });
+        }
+        function scrollToSlide(idx) {
+            if (carousel) carousel.scrollTo({ left: idx * carousel.offsetWidth, behavior: 'smooth' });
+        }
+
+        // ── 管理员操作 ────────────────────────────────────────────────────────
         function saveDescription() {
-            if (!isAdmin) return alert('权限不足');
+            if (!isAdmin) return showToast('权限不足', 'error');
             const desc = document.getElementById('adminDesc').value;
             fetch('/api/admin/description/' + pid, {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({admin_key: adminKey, description: desc})
-            }).then(res => { if(res.ok) { alert('描述已保存'); location.reload(); } else alert('保存失败，权限不足'); });
+            }).then(res => {
+                if (res.ok) { showToast('描述已保存', 'success'); setTimeout(() => location.reload(), 1000); }
+                else showToast('保存失败，权限不足', 'error');
+            });
         }
 
         function deletePost() {
-            if (!isAdmin) return alert('权限不足');
-            if (!confirm('确定要删除此帖子吗？此操作不可恢复！')) return;
-            fetch('/api/admin/post/' + pid, {
-                method:'DELETE', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({admin_key: adminKey})
-            }).then(res => { if(res.ok) { alert('帖子已删除'); location.href = '/'; } else alert('删除失败，权限不足'); });
+            if (!isAdmin) return showToast('权限不足', 'error');
+            showConfirm('确定要删除此帖子吗？此操作不可恢复！', () => {
+                fetch('/api/admin/post/' + pid, {
+                    method:'DELETE', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({admin_key: adminKey})
+                }).then(res => {
+                    if (res.ok) { showToast('帖子已删除', 'success'); setTimeout(() => location.href = '/', 900); }
+                    else showToast('删除失败，权限不足', 'error');
+                });
+            }, true);
         }
 
+        // ── 点赞 ──────────────────────────────────────────────────────────────
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
-            if (liked.includes(pid)) return alert('您已经点过赞啦！');
+            if (liked.includes(pid)) return showToast('您已经点过赞啦！');
             fetch('/api/like/'+pid, {method:'POST'}).then(res => {
                 if (res.ok) {
                     liked.push(pid); localStorage.setItem('m_liked', JSON.stringify(liked));
@@ -271,29 +435,33 @@
                     const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
                     el.textContent = n + ' 点赞';
                     document.getElementById('likeBtn').classList.add('liked');
+                    showToast('点赞成功 ♥', 'success');
                 }
             });
         }
 
+        // ── 拉黑 ──────────────────────────────────────────────────────────────
         function handleBlacklist() {
             let bl = getBlacklistedItems();
-            if (bl.includes(pid)) return alert('您已经拉黑过此内容！');
-            if (!confirm('确定要拉黑此内容吗？拉黑后将不再显示。')) return;
-            fetch('/api/blacklist/'+pid, {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({user_id: getUserId()})
-            }).then(res => {
-                if (res.ok) {
-                    addToBlacklist(pid);
-                    const el = document.getElementById('blacklistTxt');
-                    const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
-                    el.textContent = n + ' 拉黑';
-                    document.getElementById('blacklistBtn').classList.add('blklisted');
-                    alert('已拉黑此内容，返回首页后将不再显示');
-                }
-            });
+            if (bl.includes(pid)) return showToast('您已经拉黑过此内容！');
+            showConfirm('确定要拉黑此内容吗？拉黑后将不再显示。', () => {
+                fetch('/api/blacklist/'+pid, {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({user_id: getUserId()})
+                }).then(res => {
+                    if (res.ok) {
+                        addToBlacklist(pid);
+                        const el = document.getElementById('blacklistTxt');
+                        const n = parseInt(el.textContent.match(/\d+/)[0]) + 1;
+                        el.textContent = n + ' 拉黑';
+                        document.getElementById('blacklistBtn').classList.add('blklisted');
+                        showToast('已拉黑，返回后不再显示');
+                    }
+                });
+            }, true);
         }
 
+        // ── 收藏 ──────────────────────────────────────────────────────────────
         function handleFavorite() {
             fetch('/api/favorite/'+pid, {
                 method: isFavorited ? 'DELETE' : 'POST',
@@ -306,16 +474,18 @@
                     document.getElementById('favoriteTxt').textContent = isFavorited ? '已收藏' : '收藏';
                     const btn = document.getElementById('favoriteBtn');
                     isFavorited ? btn.classList.add('faved') : btn.classList.remove('faved');
+                    showToast(isFavorited ? '已加入收藏 ★' : '已取消收藏', 'success');
                 }
             });
         }
 
+        // ── 分享 ──────────────────────────────────────────────────────────────
         function handleShare() {
             const url = window.location.href;
             if (navigator.share) {
                 navigator.share({ url }).catch(() => {});
             } else if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => alert('链接已复制！')).catch(() => promptCopyLink(url));
+                navigator.clipboard.writeText(url).then(() => showToast('链接已复制！', 'success')).catch(() => promptCopyLink(url));
             } else {
                 promptCopyLink(url);
             }
@@ -325,29 +495,59 @@
             const ta = document.createElement('textarea');
             ta.value = url; ta.style.cssText = 'position:fixed;opacity:0';
             document.body.appendChild(ta); ta.select();
-            try { document.execCommand('copy'); alert('链接已复制！'); } catch { prompt('请手动复制链接:', url); }
+            try { document.execCommand('copy'); showToast('链接已复制！', 'success'); } catch { prompt('请手动复制链接:', url); }
             document.body.removeChild(ta);
         }
 
+        // ── 评论（无刷新） ────────────────────────────────────────────────────
         function submitCmt() {
-            const val = document.getElementById('cmtInput').value.trim();
+            const input = document.getElementById('cmtInput');
+            const val = input.value.trim();
             if (!val) return;
+            const btn = input.nextElementSibling;
+            btn.disabled = true;
             fetch('/api/comment/'+pid, {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({content: val, user_id: getUserId()})
-            }).then(() => location.reload());
+            }).then(r => r.json()).then(d => {
+                if (d.status === 'ok' && d.id) {
+                    input.value = '';
+                    const hint = document.getElementById('noCommentHint');
+                    if (hint) hint.remove();
+                    const list = document.getElementById('commentsList');
+                    const div = document.createElement('div');
+                    div.className = 'comment-item p-4 rounded-2xl';
+                    div.dataset.commentId = d.id;
+                    div.dataset.commentUser = getUserId();
+                    // Escape content for display (server already escapes on save)
+                    const escaped = val.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    div.innerHTML = `<p class="text-sm text-gray-300 leading-relaxed">${escaped}</p>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-xs text-gray-600 font-mono">${d.date}</span>
+                            ${isAdmin ? `<button onclick="deleteComment(${d.id})" class="text-red-400/60 hover:text-red-400 text-xs transition">删除</button>` : ''}
+                        </div>`;
+                    list.insertBefore(div, list.firstChild);
+                    showToast('评论发布成功', 'success');
+                } else if (d.status === 'error') {
+                    showToast(d.message || '发布失败', 'error');
+                }
+            }).catch(() => showToast('网络错误，请重试', 'error'))
+              .finally(() => { btn.disabled = false; });
         }
 
         function deleteComment(cid) {
-            if (!isAdmin) return alert('只有管理员可以删除评论');
-            if (!confirm('确定要删除这条评论吗？')) return;
-            fetch('/api/admin/comment/'+cid, {
-                method:'DELETE', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({admin_key: adminKey})
-            }).then(res => {
-                if (res.ok) document.querySelector('[data-comment-id="'+cid+'"]').remove();
-                else alert('删除失败：权限不足');
-            });
+            if (!isAdmin) return showToast('只有管理员可以删除评论', 'error');
+            showConfirm('确定要删除这条评论吗？', () => {
+                fetch('/api/admin/comment/'+cid, {
+                    method:'DELETE', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({admin_key: adminKey})
+                }).then(res => {
+                    if (res.ok) {
+                        document.querySelector('[data-comment-id="'+cid+'"]').remove();
+                        showToast('评论已删除');
+                    } else showToast('删除失败：权限不足', 'error');
+                });
+            }, true);
         }
 
         function openLightbox(src) {

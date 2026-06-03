@@ -43,9 +43,13 @@
     </nav>
 
     {% if notice %}
-    <div class="px-4 py-2 text-xs text-purple-300 border-b" style="background:rgba(167,139,250,0.08);border-color:rgba(167,139,250,0.15)">
-        {{ notice }}
+    <div class="px-4 py-2 text-xs text-purple-300 font-medium flex items-center gap-2" style="background:linear-gradient(90deg,rgba(167,139,250,0.15),rgba(56,189,248,0.15));border-bottom:1px solid rgba(167,139,250,0.2)">
+        <span class="flex-shrink-0 text-purple-400">📢</span>
+        <div style="width:100%;overflow:hidden;white-space:nowrap">
+            <span style="display:inline-block;animation:scroll-left 22s linear infinite">{{ notice }}</span>
+        </div>
     </div>
+    <style>@keyframes scroll-left{0%{transform:translateX(100vw)}100%{transform:translateX(-100%)}}</style>
     {% endif %}
 
     <main class="px-4 py-5 max-w-2xl mx-auto">

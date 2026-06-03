@@ -54,6 +54,7 @@
             <div>
                 <div class="logo-text text-lg font-black tracking-widest">MATRIX HUB</div>
                 <div class="text-xs text-gray-600 mt-0.5 font-mono" id="uidDisplay">…</div>
+                <div class="text-xs text-gray-700 mt-0.5" id="joinDisplay">本地用户</div>
             </div>
         </div>
     </div>
@@ -149,6 +150,17 @@
         const uid = getUserId();
         const el = document.getElementById('uidDisplay');
         if (el) el.textContent = 'ID: ' + uid.substring(0,16) + '…';
+
+        // 显示加入时间（首次访问时间）
+        const joinEl = document.getElementById('joinDisplay');
+        if (joinEl) {
+            let joinDate = localStorage.getItem('m_join_date');
+            if (!joinDate) {
+                joinDate = new Date().toLocaleDateString('zh-CN', {year:'numeric', month:'long', day:'numeric'});
+                localStorage.setItem('m_join_date', joinDate);
+            }
+            joinEl.textContent = '加入于 ' + joinDate;
+        }
 
         const liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
         const blacklisted = JSON.parse(localStorage.getItem('m_blacklisted') || '[]');
