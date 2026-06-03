@@ -1,5 +1,5 @@
 import os, sqlite3, requests, telebot, datetime, mimetypes, cv2, html
-import urllib.parse, hashlib, hmac, json, random
+import urllib.parse, hashlib, hmac, json, random, uuid
 from flask import Flask, request, render_template, jsonify, send_from_directory
 from telebot.types import (InlineKeyboardMarkup, InlineKeyboardButton,
                             ReplyKeyboardMarkup, KeyboardButton, WebAppInfo)
@@ -960,14 +960,15 @@ def api_upload_photo():
 
     f = request.files['photo']
     allowed = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-    # Use only the extension from a secured filename to avoid path injection
+    # Use secure_filename then extract extension to avoid path injection
     from werkzeug.utils import secure_filename as _sfn
     safe_name = _sfn(f.filename or 'upload')
     ext = os.path.splitext(safe_name)[1].lower()
     if ext not in allowed:
         return jsonify({"status": "error", "message": "不支持的文件格式"}), 400
 
-    filename = f"profile_{tg_id}_{int(time.time())}{ext}"
+    # Use uuid for filename — no user-provided data in path
+    filename = f"profile_{uuid.uuid4().hex}{ext}"
     save_path = os.path.join(UPLOAD_DIR, filename)
     f.save(save_path)
     return jsonify({"status": "ok", "url": f"/uploads/{filename}"})
