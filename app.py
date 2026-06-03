@@ -235,7 +235,10 @@ def get_tg_id_from_request():
         if user_data:
             return str(user_data.get('id', ''))
     # fallback: query param tg_id (仅用于开发/测试)
-    return request.args.get('tg_id', '') or data.get('tg_id', '')
+    fallback = request.args.get('tg_id', '') or data.get('tg_id', '')
+    if fallback and str(fallback).lstrip('-').isdigit():
+        return str(fallback)
+    return ''
 
 def get_or_create_user(tg_id, username='', first_name=''):
     """获取或创建用户记录，返回 role"""
