@@ -960,7 +960,10 @@ def api_upload_photo():
 
     f = request.files['photo']
     allowed = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
-    ext = os.path.splitext(f.filename)[1].lower()
+    # Use only the extension from a secured filename to avoid path injection
+    from werkzeug.utils import secure_filename as _sfn
+    safe_name = _sfn(f.filename or 'upload')
+    ext = os.path.splitext(safe_name)[1].lower()
     if ext not in allowed:
         return jsonify({"status": "error", "message": "不支持的文件格式"}), 400
 
