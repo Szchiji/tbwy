@@ -368,23 +368,23 @@ def webhook():
         gid = p.media_group_id
 
         # 2a. /start 命令 — 三角色分流
-        if txt == '/start' and uid and not update.channel_post:
+        if txt.split()[0] == '/start' and uid and not update.channel_post:
             role = get_or_create_user(uid,
                                       p.from_user.username or '',
                                       p.from_user.first_name or '')
             if role == 'admin':
-                markup = InlineKeyboardMarkup()
-                markup.add(InlineKeyboardButton("🔧 管理员后台",
-                    web_app=WebAppInfo(url=f"{BASE_URL}/admin") if BASE_URL else None,
-                    url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}" if not BASE_URL or True else None))
-                # 使用 url fallback 确保兼容
-                markup2 = InlineKeyboardMarkup()
-                markup2.add(InlineKeyboardButton("🔧 管理员后台",
-                    url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}"))
-                bot.send_message(uid,
-                    "👋 欢迎回来，管理员！\n\n"
-                    "🔧 点击下方按钮进入 星搭 StarMatch 管理后台，可审核资料、配置表单、发布公告等。",
-                    reply_markup=markup2)
+                if BASE_URL:
+                    markup2 = InlineKeyboardMarkup()
+                    markup2.add(InlineKeyboardButton("🔧 管理员后台",
+                        url=f"{BASE_URL}/admin?admin_key={ADMIN_KEY}"))
+                    bot.send_message(uid,
+                        "👋 欢迎回来，管理员！\n\n"
+                        "🔧 点击下方按钮进入 星搭 StarMatch 管理后台，可审核资料、配置表单、发布公告等。",
+                        reply_markup=markup2)
+                else:
+                    bot.send_message(uid,
+                        "👋 欢迎回来，管理员！\n\n"
+                        "🔧 请访问后台管理页面。")
             elif role == 'user':
                 markup = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
                 if BASE_URL:
@@ -407,16 +407,16 @@ def webhook():
                     "🌟 欢迎使用 星搭 StarMatch",
                     reply_markup=markup)
             else:  # client
-                markup = InlineKeyboardMarkup()
                 if BASE_URL:
+                    markup = InlineKeyboardMarkup()
                     markup.add(InlineKeyboardButton("🔍 进入小程序",
                         web_app=WebAppInfo(url=f"{BASE_URL}/")))
+                    bot.send_message(uid,
+                        "👋 欢迎来到 星搭 StarMatch！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
+                        reply_markup=markup)
                 else:
-                    markup.add(InlineKeyboardButton("🔍 进入小程序",
-                        url=f"{BASE_URL}/"))
-                bot.send_message(uid,
-                    "👋 欢迎来到 星搭 StarMatch！\n\n点击下方按钮进入小程序，浏览所有内容 🎉",
-                    reply_markup=markup)
+                    bot.send_message(uid,
+                        "👋 欢迎来到 星搭 StarMatch！\n\n浏览所有内容 🎉")
             return 'OK'
 
         # 2b. 用户角色：查看我的资料
