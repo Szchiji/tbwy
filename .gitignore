@@ -1,9 +1,7 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.db
-data/
-uploads/
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env.local
+*.log

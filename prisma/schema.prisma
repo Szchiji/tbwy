@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  tgId        String   @unique
+  username    String?
+  firstName   String?
+  lastName    String?
+  photoUrl    String?
+  role        Role     @default(USER)
+  creditScore Int      @default(100)
+  createdAt   DateTime @default(now())
+
+  posts       Post[]
+  comments    Comment[]
+  favorites   Favorite[]
+  blacklists  UserBlacklist[]
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+model Post {
+  id                Int      @id @default(autoincrement())
+  msgId             Int?     @unique
+  text              String?
+  title             String?
+  date              DateTime @default(now())
+  likes             Int      @default(0)
+  mediaGroupId      String?
+  firstMedia        String?
+  thumbnail         String?
+  isApproved        Boolean  @default(false)
+  tags              String   @default("")
+  aiScore           Float?
+  customDescription String?
+  blacklistCount    Int      @default(0)
+
+  authorId          String?
+  author            User?    @relation(fields: [authorId], references: [id])
+
+  comments          Comment[]
+  favorites         Favorite[]
+  blacklists        UserBlacklist[]
+
+  @@index([isApproved])
+  @@index([date(sort: Desc)])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  content   String
+  createdAt DateTime @default(now())
+
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+
+  @@index([postId])
+}
+
+model Favorite {
+  userId    String
+  postId    Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+}
+
+model UserBlacklist {
+  userId    String
+  postId    Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model BotState {
+  userId    String   @id
+  state     String   @default("idle")
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt
+}
