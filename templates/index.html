@@ -277,9 +277,18 @@
                 </div>`;
             }
 
-            const title = post.title ? `<p class="text-white text-sm font-bold leading-snug mb-1 truncate">${post.title}</p>` : '';
-            const textClamp = post.title ? 'line-clamp-2' : 'line-clamp-4';
-            const bodyText = post.text || '查看详情 →';
+            let badgeHTML = '';
+            if (post.title === '官方') {
+                badgeHTML = `<span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">📢 官方</span>`;
+            } else if (post.title === '投稿') {
+                badgeHTML = `<span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.25)">✉️ 投稿</span>`;
+            } else if (post.title) {
+                badgeHTML = `<span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(167,139,250,0.1);color:var(--accent);border:1px solid rgba(167,139,250,0.2)">${post.title}</span>`;
+            }
+
+            const bodyText = post.custom_description
+                ? `<p class="text-sm leading-relaxed line-clamp-3 break-words" style="color:var(--accent2);opacity:0.95">${post.custom_description}</p>`
+                : `<p class="text-sm leading-relaxed line-clamp-3 break-words whitespace-pre-wrap" style="color:var(--tg-text);opacity:0.88">${post.text || '点击查看详情 →'}</p>`;
 
             return `<div class="post-card rounded-2xl overflow-hidden cursor-pointer flex" data-post-id="${post.id}" style="animation:card-in 0.4s ease both">
                 <div class="relative w-28 aspect-square flex-shrink-0 overflow-hidden">
@@ -287,8 +296,8 @@
                 </div>
                 <div class="flex-1 p-3 flex flex-col min-w-0 justify-between">
                     <div>
-                        ${title}
-                        <p class="text-sm leading-relaxed ${textClamp} break-words whitespace-pre-wrap" style="color:var(--tg-text)">${bodyText}</p>
+                        ${badgeHTML}
+                        ${bodyText}
                     </div>
                     <div class="flex items-center justify-between mt-2">
                         <span class="text-xs" style="color:var(--tg-hint)">${post.date}</span>
@@ -416,7 +425,7 @@
         }
     </script>
 </head>
-<body class="min-h-screen pb-20" style="color:var(--tg-text)">
+<body class="min-h-screen pb-24" style="color:var(--tg-text)">
 
     <!-- 下拉刷新指示器 -->
     <div id="ptr-indicator">
@@ -429,7 +438,15 @@
     <!-- 顶部导航 -->
     <nav class="top-nav sticky top-0 z-50 px-4 h-14 flex items-center justify-between">
         <a href="/" class="logo-text text-xl font-black tracking-widest">MATRIX HUB</a>
-        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="在线"></div>
+        <div class="flex items-center gap-2">
+            <a href="/upload?user_id={{ user_id }}" class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-full" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.3)">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                投稿
+            </a>
+            <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="在线"></div>
+        </div>
     </nav>
 
     <!-- 公告 -->
@@ -447,6 +464,7 @@
         <form action="/" method="get">
             {% if type_filter %}<input type="hidden" name="type" value="{{ type_filter }}">{% endif %}
             {% if sort != 'latest' %}<input type="hidden" name="sort" value="{{ sort }}">{% endif %}
+            {% if source %}<input type="hidden" name="source" value="{{ source }}">{% endif %}
             <div class="search-wrap rounded-2xl px-4 py-3 flex items-center gap-3">
                 <svg class="w-4 h-4 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -454,25 +472,29 @@
                 <input type="text" name="q" value="{{ q }}" placeholder="搜索内容…"
                        class="bg-transparent flex-1 text-gray-200 placeholder-gray-600 outline-none text-sm">
                 {% if q %}
-                <a href="/?type={{ type_filter }}&sort={{ sort }}&user_id={{ user_id }}" class="text-gray-600 hover:text-gray-400 text-lg leading-none">&times;</a>
+                <a href="/?type={{ type_filter }}&sort={{ sort }}&source={{ source }}&user_id={{ user_id }}" class="text-gray-600 hover:text-gray-400 text-lg leading-none">&times;</a>
                 {% endif %}
             </div>
         </form>
     </div>
 
-    <!-- 筛选 + 排序栏 -->
-    <div class="px-4 pb-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
+    <!-- 分区 + 类型筛选栏 -->
+    <div class="px-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
         <a href="/?q={{ q }}&sort={{ sort }}&user_id={{ user_id }}"
-           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if not type_filter %}active{% endif %}">全部</a>
-        <a href="/?q={{ q }}&type=image&sort={{ sort }}&user_id={{ user_id }}"
+           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if not source and not type_filter %}active{% endif %}">全部</a>
+        <a href="/?q={{ q }}&source=official&sort={{ sort }}&user_id={{ user_id }}"
+           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if source == 'official' %}active{% endif %}">📢 官方</a>
+        <a href="/?q={{ q }}&source=user&sort={{ sort }}&user_id={{ user_id }}"
+           class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if source == 'user' %}active{% endif %}">✉️ 投稿</a>
+        <a href="/?q={{ q }}&type=image&source={{ source }}&sort={{ sort }}&user_id={{ user_id }}"
            class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if type_filter == 'image' %}active{% endif %}">🖼 图片</a>
-        <a href="/?q={{ q }}&type=video&sort={{ sort }}&user_id={{ user_id }}"
+        <a href="/?q={{ q }}&type=video&source={{ source }}&sort={{ sort }}&user_id={{ user_id }}"
            class="filter-tab rounded-full px-3 py-1 text-xs font-medium {% if type_filter == 'video' %}active{% endif %}">▶ 视频</a>
         <div class="ml-auto flex items-center gap-1.5 flex-shrink-0">
-            <a href="/?q={{ q }}&type={{ type_filter }}&sort=latest&user_id={{ user_id }}"
+            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&sort=latest&user_id={{ user_id }}"
                class="sort-btn rounded-full px-3 py-1 text-xs font-medium {% if sort != 'hot' %}active{% endif %}">最新</a>
-            <a href="/?q={{ q }}&type={{ type_filter }}&sort=hot&user_id={{ user_id }}"
-               class="sort-btn rounded-full px-3 py-1 text-xs font-medium {% if sort == 'hot' %}active{% endif %}">🔥 最热</a>
+            <a href="/?q={{ q }}&type={{ type_filter }}&source={{ source }}&sort=hot&user_id={{ user_id }}"
+               class="sort-btn rounded-full px-3 py-1 text-xs font-medium {% if sort == 'hot' %}active{% endif %}">🔥 热门</a>
         </div>
     </div>
 
@@ -516,12 +538,20 @@
                 <!-- 文字区域 -->
                 <div class="flex-1 p-3 flex flex-col min-w-0 justify-between">
                     <div>
-                        {% if post.title %}
-                        <p class="text-sm font-bold leading-snug mb-1 truncate" style="color:var(--tg-text)">{{ post.title }}</p>
+                        <!-- 来源徽章 -->
+                        {% if post.title == '官方' %}
+                        <span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(56,189,248,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">📢 官方</span>
+                        {% elif post.title == '投稿' %}
+                        <span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.25)">✉️ 投稿</span>
+                        {% elif post.title %}
+                        <span class="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mb-1" style="background:rgba(167,139,250,0.1);color:var(--accent);border:1px solid rgba(167,139,250,0.2)">{{ post.title }}</span>
                         {% endif %}
-                        <p class="text-sm leading-relaxed {% if post.title %}line-clamp-2{% else %}line-clamp-4{% endif %} break-words whitespace-pre-wrap" style="color:var(--tg-text);opacity:0.85">
-                            {{ post.text if post.text else '查看详情 →' }}
-                        </p>
+                        <!-- 内容摘要：优先显示 custom_description，其次显示正文 -->
+                        {% if post.custom_description %}
+                        <p class="text-sm leading-relaxed line-clamp-3 break-words" style="color:var(--accent2);opacity:0.95">{{ post.custom_description }}</p>
+                        {% else %}
+                        <p class="text-sm leading-relaxed line-clamp-3 break-words whitespace-pre-wrap" style="color:var(--tg-text);opacity:0.88">{{ post.text if post.text else '点击查看详情 →' }}</p>
+                        {% endif %}
                     </div>
                     <div class="flex items-center justify-between mt-2">
                         <span class="text-xs" style="color:var(--tg-hint)">{{ post.date }}</span>
@@ -546,8 +576,10 @@
         {% else %}
         <div class="empty-state text-center py-24">
             <div class="text-5xl mb-4">🔍</div>
-            <p class="text-gray-500">没有找到相关内容</p>
-            {% if q %}<a href="/?type={{ type_filter }}&sort={{ sort }}" class="inline-block mt-4 text-purple-400 text-sm">清除搜索</a>{% endif %}
+            <p class="text-gray-500 mb-2">没有找到相关内容</p>
+            {% if q or type_filter or source %}
+            <a href="/?sort={{ sort }}&user_id={{ user_id }}" class="inline-block mt-3 text-purple-400 text-sm">清除筛选</a>
+            {% endif %}
         </div>
         {% endif %}
     </main>
@@ -567,6 +599,13 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
                 </svg>
                 <span class="text-[10px]">收藏</span>
+                <span class="nav-dot"></span>
+            </a>
+            <a href="/upload?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="text-[10px]">投稿</span>
                 <span class="nav-dot"></span>
             </a>
             <a href="/profile?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5">
