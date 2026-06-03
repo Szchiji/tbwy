@@ -186,6 +186,15 @@ def init_db():
 
 init_db()
 
+# 注册 Webhook（在模块加载时执行，确保 Gunicorn 启动时也能注册）
+if BASE_URL and BOT_TOKEN:
+    try:
+        bot.remove_webhook()
+        bot.set_webhook(url=f"{BASE_URL}/webhook")
+        print(f"Webhook registered: {BASE_URL}/webhook")
+    except Exception as e:
+        print(f"WARNING: Failed to register webhook: {e}")
+
 # --- 新系统辅助函数 ---
 
 def verify_init_data(init_data_str):
@@ -368,7 +377,7 @@ def webhook():
         gid = p.media_group_id
 
         # 2a. /start 命令 — 三角色分流
-        if txt.split()[0] == '/start' and uid and not update.channel_post:
+        if txt.startswith('/start') and uid and not update.channel_post:
             role = get_or_create_user(uid,
                                       p.from_user.username or '',
                                       p.from_user.first_name or '')
@@ -419,7 +428,42 @@ def webhook():
                         "👋 欢迎来到 星搭 StarMatch！\n\n浏览所有内容 🎉")
             return 'OK'
 
-        # 2b. 用户角色：查看我的资料
+        # 2b. /help 命令
+        if txt.startswith('/help') and uid and not update.channel_post:
+            if BASE_URL:
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("🔍 进入小程序", web_app=WebAppInfo(url=f"{BASE_URL}/")))
+                bot.send_message(uid,
+                    "📖 帮助信息\n\n"
+                    "可用命令：\n"
+                    "/start — 开始使用\n"
+                    "/upload — 上传资料\n"
+                    "/help — 查看帮助\n\n"
+                    "点击下方按钮进入小程序 🎉",
+                    reply_markup=markup)
+            else:
+                bot.send_message(uid,
+                    "📖 帮助信息\n\n"
+                    "可用命令：\n"
+                    "/start — 开始使用\n"
+                    "/upload — 上传资料\n"
+                    "/help — 查看帮助")
+            return 'OK'
+
+        # 2c. /upload 命令
+        if txt.startswith('/upload') and uid and not update.channel_post:
+            if BASE_URL:
+                markup = InlineKeyboardMarkup()
+                markup.add(InlineKeyboardButton("📝 上传资料",
+                    web_app=WebAppInfo(url=f"{BASE_URL}/upload_profile")))
+                bot.send_message(uid,
+                    "📝 点击下方按钮上传您的资料，审核通过后将展示在平台上。",
+                    reply_markup=markup)
+            else:
+                bot.send_message(uid, "📝 请联系管理员上传资料。")
+            return 'OK'
+
+        # 2d. 用户角色：查看我的资料
         if txt == '👁 查看我的资料' and uid and not update.channel_post:
             with get_db() as conn:
                 profile = conn.execute(
@@ -1568,8 +1612,4 @@ def favorites_page():
                            notice=notice['value'] if notice else '', tg_id=tg_id)
 
 if __name__ == '__main__':
-    # 自动设置 Webhook
-    if BASE_URL and BOT_TOKEN:
-        bot.remove_webhook()
-        bot.set_webhook(url=f"{BASE_URL}/webhook")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
