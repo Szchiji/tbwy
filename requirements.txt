@@ -1,6 +1,0 @@
-flask
-requests
-pyTelegramBotAPI
-opencv-python-headless
-gunicorn
-httpx
