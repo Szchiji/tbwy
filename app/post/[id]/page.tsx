@@ -219,7 +219,6 @@ export default function PostDetailPage() {
             }}
           />
           <Button
-            size="sm"
             onClick={() => {
               if (content.trim()) {
                 void callAction(`/api/posts/${postId}/comment`, 'comment', { content })
