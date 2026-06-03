@@ -31,6 +31,9 @@ export function getTelegramBot() {
   if (!token) return null
   if (!botRef) {
     botRef = new Bot(token)
+    botRef.catch((err) => {
+      console.error('Error in Grammy bot handler:', err.error)
+    })
   }
   if (initialized) return botRef
 
@@ -151,6 +154,17 @@ export function getTelegramBot() {
     })
   })
 
+  botRef.command('help', async (ctx) => {
+    await ctx.reply('🤖 智能内容共创机器人指令说明：\n\n' +
+      '/start - 启动机器人并开启功能菜单\n' +
+      '/desc - 开启图片/视频快捷投稿流程\n' +
+      '/cancel - 取消当前的投稿流程\n' +
+      '/sync - 查询并同步您的小程序契约者档案\n' +
+      '/notice - 查看系统最新公告\n' +
+      '/admin - 管理员专用的后台安全管理快捷入口\n' +
+      '/help - 查看此帮助信息')
+  })
+
   botRef.on('message', async (ctx) => {
     const fromId = getFromId(ctx)
     if (!fromId) return
@@ -185,61 +199,101 @@ export function getTelegramBot() {
       return
     }
 
-    if (state === 'waiting_description' && ctx.message.text) {
-      await setState(userId, 'waiting_confirm', { ...data, description: ctx.message.text })
-      await ctx.reply(`🔍 投稿信息核对：\n\n📝 描述：${ctx.message.text}\n\n确认无误后，请点击下方按钮完成投递：`, {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ 确认投稿', callback_data: 'flow_confirm' },
-              { text: '❌ 取消', callback_data: 'flow_cancel' }
+    if (state === 'waiting_description') {
+      if (ctx.message.text) {
+        await setState(userId, 'waiting_confirm', { ...data, description: ctx.message.text })
+        await ctx.reply(`🔍 投稿信息核对：\n\n📝 描述：${ctx.message.text}\n\n确认无误后，请点击下方按钮完成投递：`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ 确认投稿', callback_data: 'flow_confirm' },
+                { text: '❌ 取消', callback_data: 'flow_cancel' }
+              ]
             ]
-          ]
-        }
-      })
+          }
+        })
+      } else {
+        await ctx.reply('⚠️ 请发送该投稿的描述文本/文案，或者点击下方按钮取消。', {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '❌ 取消当前投稿', callback_data: 'flow_cancel' }]
+            ]
+          }
+        })
+      }
       return
     }
 
-    if (state === 'waiting_confirm' && ctx.message.text === '确认') {
-      const created = await prisma.post.create({
-        data: {
-          text: data.description,
-          title: data.description?.slice(0, 40),
-          firstMedia: data.media,
-          isApproved: false,
-          customDescription: data.description,
-        },
-      })
-      await setState(userId, 'idle', {})
-      await ctx.reply(`🎉 投稿已成功提交！\n📝 投稿编号：${created.id}\n\n我们的管理员正在对内容进行审核，请耐心等待。`)
-      
-      const adminChatId = process.env.MY_CHAT_ID
-      if (adminChatId) {
-        const caption = `💡 新投稿待审核\n📝 编号：${created.id}\n📝 描述：${created.text || '无'}`
-        const replyMarkup = {
-          inline_keyboard: [
-            [
-              { text: '✅ 通过', callback_data: `y_${created.id}` },
-              { text: '❌ 拒绝', callback_data: `n_${created.id}` }
+    if (state === 'waiting_confirm') {
+      if (ctx.message.text === '确认') {
+        const created = await prisma.post.create({
+          data: {
+            text: data.description,
+            title: data.description?.slice(0, 40),
+            firstMedia: data.media,
+            isApproved: false,
+            customDescription: data.description,
+          },
+        })
+        await setState(userId, 'idle', {})
+        await ctx.reply(`🎉 投稿已成功提交！\n📝 投稿编号：${created.id}\n\n我们的管理员正在对内容进行审核，请耐心等待。`)
+        
+        const adminChatId = process.env.MY_CHAT_ID
+        if (adminChatId) {
+          const caption = `💡 新投稿待审核\n📝 编号：${created.id}\n📝 描述：${created.text || '无'}`
+          const replyMarkup = {
+            inline_keyboard: [
+              [
+                { text: '✅ 通过', callback_data: `y_${created.id}` },
+                { text: '❌ 拒绝', callback_data: `n_${created.id}` }
+              ]
             ]
-          ]
-        }
-        if (created.firstMedia) {
-          try {
-            if (data.mediaType === 'video') {
-              await ctx.api.sendVideo(adminChatId, created.firstMedia, { caption, reply_markup: replyMarkup })
-            } else {
-              await ctx.api.sendPhoto(adminChatId, created.firstMedia, { caption, reply_markup: replyMarkup })
+          }
+          if (created.firstMedia) {
+            try {
+              if (data.mediaType === 'video') {
+                await ctx.api.sendVideo(adminChatId, created.firstMedia, { caption, reply_markup: replyMarkup })
+              } else {
+                await ctx.api.sendPhoto(adminChatId, created.firstMedia, { caption, reply_markup: replyMarkup })
+              }
+            } catch (e) {
+              console.error('Failed to send media to admin, fallback to message', e)
+              await ctx.api.sendMessage(adminChatId, caption, { reply_markup: replyMarkup })
             }
-          } catch (e) {
-            console.error('Failed to send media to admin, fallback to message', e)
+          } else {
             await ctx.api.sendMessage(adminChatId, caption, { reply_markup: replyMarkup })
           }
-        } else {
-          await ctx.api.sendMessage(adminChatId, caption, { reply_markup: replyMarkup })
         }
+      } else {
+        await ctx.reply('⚠️ 确认无误后，请点击下方按钮「确认投稿」完成投递，或者直接回复「确认」进行投稿：', {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ 确认投稿', callback_data: 'flow_confirm' },
+                { text: '❌ 取消', callback_data: 'flow_cancel' }
+              ]
+            ]
+          }
+        })
       }
       return
+    }
+
+    // Default fallback response for text messages in idle state or unhandled states
+    if (ctx.message?.text && !ctx.message.text.startsWith('/')) {
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: '🚀 进入小程序', web_app: { url: process.env.BASE_URL || '' } }
+          ],
+          [
+            { text: '📝 发起快捷投稿', callback_data: 'flow_start_desc' }
+          ]
+        ]
+      }
+      await ctx.reply('👋 您好！目前没有处于投稿流程中。\n您可以直接点击下方按钮进入小程序浏览精彩内容，或发起快捷投稿：', {
+        reply_markup: replyMarkup
+      })
     }
   })
 
