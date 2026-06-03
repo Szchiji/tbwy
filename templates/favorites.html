@@ -2,13 +2,14 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>我的收藏 · Matrix Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --accent: #a78bfa; --bg: #08080f; --surface: #101018; --border: rgba(167,139,250,0.12); }
+        :root { --accent: #a78bfa; --bg: #08080f; --surface: #101018; --border: rgba(167,139,250,0.12); --tg-text: #e5e7eb; --tg-hint: #6b7280; }
         * { -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--tg-text); }
         .top-nav { background: rgba(8,8,15,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); }
         .logo-text { background: linear-gradient(135deg,#a78bfa,#38bdf8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
         .post-card { background: var(--surface); border: 1px solid var(--border); transition: transform 0.18s ease, border-color 0.18s ease; animation: card-in 0.35s ease both; }
@@ -17,6 +18,10 @@
         @keyframes card-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
         .post-card:nth-child(1){animation-delay:.04s} .post-card:nth-child(2){animation-delay:.08s} .post-card:nth-child(3){animation-delay:.12s} .post-card:nth-child(n+4){animation-delay:.16s}
         .media-ph { background: linear-gradient(135deg,#1a1a2e,#0d1120); }
+        .img-lazy { opacity:0; transition:opacity .35s ease; }
+        .img-lazy.loaded { opacity:1; }
+        .img-skeleton { position:absolute;inset:0;background:linear-gradient(90deg,#1a1a2e 25%,#222240 50%,#1a1a2e 75%);background-size:200% 100%;animation:shimmer 1.4s infinite; }
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         .bottom-nav { background: rgba(8,8,15,0.92); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-top:1px solid var(--border); }
         .nav-tab { color:#6b7280; transition:color .2s; }
         .nav-tab.active { color:var(--accent); }
@@ -24,7 +29,20 @@
         .nav-tab.active .nav-dot { display:block; }
     </style>
     <script>
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            tg.ready(); tg.expand();
+            const tp = tg.themeParams || {}, r = document.documentElement;
+            if (tp.bg_color)           { r.style.setProperty('--bg', tp.bg_color); r.style.setProperty('--surface', tp.bg_color); }
+            if (tp.secondary_bg_color) r.style.setProperty('--surface', tp.secondary_bg_color);
+            if (tp.text_color)         r.style.setProperty('--tg-text', tp.text_color);
+            if (tp.hint_color)         r.style.setProperty('--tg-hint', tp.hint_color);
+            if (tp.link_color)         r.style.setProperty('--accent', tp.link_color);
+        })();
+        function haptic(t) { try { const h=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.HapticFeedback; if(!h)return; t==='light'?h.impactOccurred('light'):t==='select'?h.selectionChanged():null; } catch(e){} }
         function getUserId() {
+            try { const tg=window.Telegram&&window.Telegram.WebApp; if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user&&tg.initDataUnsafe.user.id) return 'tg_'+tg.initDataUnsafe.user.id; } catch(e){}
             let uid = localStorage.getItem('user_id');
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
@@ -32,10 +50,20 @@
         window.onload = function() {
             const p = new URLSearchParams(window.location.search);
             if (!p.has('user_id')) { p.set('user_id', getUserId()); window.location.search = p.toString(); }
+            const obs = new IntersectionObserver((entries, observer) => {
+                entries.forEach(e => {
+                    if (!e.isIntersecting) return;
+                    const img = e.target;
+                    if (img.dataset.src) { img.src = img.dataset.src; img.removeAttribute('data-src'); img.onload = () => { img.classList.add('loaded'); const sk=img.previousElementSibling; if(sk&&sk.classList.contains('img-skeleton'))sk.remove(); }; }
+                    observer.unobserve(img);
+                });
+            }, { rootMargin:'150px' });
+            document.querySelectorAll('img.img-lazy[data-src]').forEach(img => obs.observe(img));
+            document.querySelectorAll('.post-card').forEach(c => c.addEventListener('click', () => haptic('light'), {passive:true}));
         };
     </script>
 </head>
-<body class="min-h-screen text-white pb-20">
+<body class="min-h-screen pb-20" style="color:var(--tg-text)">
 
     <nav class="top-nav sticky top-0 z-50 px-4 h-14 flex items-center justify-between">
         <a href="/?user_id={{ user_id }}" class="logo-text text-xl font-black tracking-widest">MATRIX HUB</a>
@@ -54,26 +82,28 @@
 
     <main class="px-4 py-5 max-w-2xl mx-auto">
         {% if posts %}
-        <p class="text-xs text-gray-600 mb-4">共 {{ posts|length }} 条收藏</p>
+        <p class="text-xs mb-4" style="color:var(--tg-hint)">共 {{ posts|length }} 条收藏</p>
         <div class="space-y-3">
             {% for post in posts %}
             <div class="post-card rounded-2xl overflow-hidden cursor-pointer flex"
                  onclick="location.href='/post/{{ post.id }}?user_id={{ user_id }}'">
 
-                <div class="relative w-28 h-28 flex-shrink-0">
+                <div class="relative w-28 h-28 flex-shrink-0 overflow-hidden">
                     {% set media = post.first_media or '' %}
                     {% set is_video = media.lower().endswith('.mp4') or media.lower().endswith('.mov') %}
                     {% if media and is_video %}
                         {% if post.thumbnail %}
-                        <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="">
+                        <div class="img-skeleton"></div>
+                        <img data-src="{{ post.thumbnail }}" class="img-lazy w-full h-full object-cover" alt="">
                         {% else %}
                         <div class="media-ph w-full h-full flex items-center justify-center">
                             <svg class="w-7 h-7 text-purple-500/40" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                         </div>
                         {% endif %}
                     {% elif media %}
-                        <img src="{{ media }}" class="w-full h-full object-cover" alt=""
-                             onerror="this.parentElement.innerHTML='<div class=\'media-ph w-full h-full\'></div>'">
+                        <div class="img-skeleton"></div>
+                        <img data-src="{{ media }}" class="img-lazy w-full h-full object-cover" alt=""
+                             onerror="this.previousElementSibling&&this.previousElementSibling.remove();this.parentElement.innerHTML='<div class=\'media-ph w-full h-full\'></div>'">
                     {% else %}
                         <div class="media-ph w-full h-full flex items-center justify-center">
                             <svg class="w-7 h-7 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -82,11 +112,11 @@
                 </div>
 
                 <div class="flex-1 p-3 flex flex-col justify-between min-w-0">
-                    <p class="text-gray-200 text-sm leading-relaxed line-clamp-4 break-words whitespace-pre-wrap">
+                    <p class="text-sm leading-relaxed line-clamp-4 break-words whitespace-pre-wrap" style="color:var(--tg-text)">
                         {{ post.text if post.text else '查看详情 →' }}
                     </p>
                     <div class="flex items-center justify-between mt-2">
-                        <span class="text-gray-600 text-xs">{{ post.date }}</span>
+                        <span class="text-xs" style="color:var(--tg-hint)">{{ post.date }}</span>
                         <div class="flex items-center gap-2 text-xs">
                             <span class="text-rose-400/80">♥ {{ post.likes }}</span>
                             <span class="text-amber-400/80">★ 已收藏</span>

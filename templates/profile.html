@@ -2,13 +2,14 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>我的 · Matrix Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --accent:#a78bfa; --accent2:#38bdf8; --bg:#08080f; --surface:#101018; --border:rgba(167,139,250,0.12); }
+        :root { --accent:#a78bfa; --accent2:#38bdf8; --bg:#08080f; --surface:#101018; --border:rgba(167,139,250,0.12); --tg-text:#e5e7eb; --tg-hint:#6b7280; }
         * { -webkit-tap-highlight-color:transparent; }
-        body { background:var(--bg); color:#e5e7eb; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+        body { background:var(--bg); color:var(--tg-text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
         .bottom-nav { background:rgba(8,8,15,0.92); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-top:1px solid var(--border); }
         .nav-tab { color:#6b7280; transition:color .2s; }
         .nav-tab.active { color:var(--accent); }
@@ -38,6 +39,20 @@
         .fade-in-3 { animation: fade-in .4s .16s ease both; }
         .fade-in-4 { animation: fade-in .4s .24s ease both; }
     </style>
+    <script>
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            tg.ready(); tg.expand();
+            const tp = tg.themeParams || {}, r = document.documentElement;
+            if (tp.bg_color)           { r.style.setProperty('--bg', tp.bg_color); r.style.setProperty('--surface', tp.bg_color); }
+            if (tp.secondary_bg_color) r.style.setProperty('--surface', tp.secondary_bg_color);
+            if (tp.text_color)         r.style.setProperty('--tg-text', tp.text_color);
+            if (tp.hint_color)         r.style.setProperty('--tg-hint', tp.hint_color);
+            if (tp.link_color)         r.style.setProperty('--accent', tp.link_color);
+        })();
+        function haptic(t) { try { const h=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.HapticFeedback; if(!h)return; t==='light'?h.impactOccurred('light'):t==='medium'?h.impactOccurred('medium'):t==='error'?h.notificationOccurred('error'):null; } catch(e){} }
+    </script>
 </head>
 <body class="min-h-screen pb-24">
 
@@ -53,8 +68,8 @@
             </div>
             <div>
                 <div class="logo-text text-lg font-black tracking-widest">MATRIX HUB</div>
-                <div class="text-xs text-gray-600 mt-0.5 font-mono" id="uidDisplay">…</div>
-                <div class="text-xs text-gray-700 mt-0.5" id="joinDisplay">本地用户</div>
+                <div class="text-xs font-mono mt-0.5" style="color:var(--tg-hint)" id="uidDisplay">…</div>
+                <div class="text-xs mt-0.5" style="color:var(--tg-hint)" id="joinDisplay">本地用户</div>
             </div>
         </div>
     </div>
@@ -65,50 +80,50 @@
         <div class="grid grid-cols-3 gap-3 mb-5 fade-in-2">
             <div class="stat-card rounded-2xl p-4 text-center">
                 <div class="text-2xl font-black" style="color:var(--accent)" id="likeCount">0</div>
-                <div class="text-[11px] text-gray-500 mt-1">点过赞</div>
+                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">点过赞</div>
             </div>
             <div class="stat-card rounded-2xl p-4 text-center">
                 <div class="text-2xl font-black text-amber-400">{{ favorites|length }}</div>
-                <div class="text-[11px] text-gray-500 mt-1">收藏</div>
+                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">收藏</div>
             </div>
             <div class="stat-card rounded-2xl p-4 text-center">
                 <div class="text-2xl font-black text-red-400" id="blacklistCount">0</div>
-                <div class="text-[11px] text-gray-500 mt-1">已拉黑</div>
+                <div class="text-[11px] mt-1" style="color:var(--tg-hint)">已拉黑</div>
             </div>
         </div>
 
         <!-- 我的收藏 -->
         <div class="section-card rounded-2xl overflow-hidden mb-4 fade-in-3">
             <div class="px-4 py-3 flex items-center justify-between border-b" style="border-color:var(--border)">
-                <span class="text-sm font-bold text-gray-300">我的收藏</span>
-                <a href="/favorites?user_id={{ user_id }}" class="text-xs" style="color:var(--accent)">查看全部 →</a>
+                <span class="text-sm font-bold" style="color:var(--tg-text)">我的收藏</span>
+                <a href="/favorites?user_id={{ user_id }}" class="text-xs" style="color:var(--accent)" onclick="haptic('light')">查看全部 →</a>
             </div>
             {% if favorites %}
             {% for post in favorites[:5] %}
-            <a href="/post/{{ post.id }}?user_id={{ user_id }}" class="list-item px-4 py-3 block">
-                <div class="text-sm text-gray-300 line-clamp-1">{{ post.text or '查看详情' }}</div>
-                <div class="text-xs text-gray-600 mt-0.5">{{ post.date }}</div>
+            <a href="/post/{{ post.id }}?user_id={{ user_id }}" class="list-item px-4 py-3 block" onclick="haptic('light')">
+                <div class="text-sm line-clamp-1" style="color:var(--tg-text)">{{ post.text or '查看详情' }}</div>
+                <div class="text-xs mt-0.5" style="color:var(--tg-hint)">{{ post.date }}</div>
             </a>
             {% endfor %}
             {% else %}
-            <div class="px-4 py-8 text-center text-gray-600 text-sm">暂无收藏</div>
+            <div class="px-4 py-8 text-center text-sm" style="color:var(--tg-hint)">暂无收藏</div>
             {% endif %}
         </div>
 
         <!-- 我的评论 -->
         <div class="section-card rounded-2xl overflow-hidden mb-4 fade-in-4">
             <div class="px-4 py-3 border-b" style="border-color:var(--border)">
-                <span class="text-sm font-bold text-gray-300">我的评论</span>
+                <span class="text-sm font-bold" style="color:var(--tg-text)">我的评论</span>
             </div>
             {% if comments %}
             {% for comment in comments[:5] %}
-            <a href="/post/{{ comment.post_id }}?user_id={{ user_id }}" class="list-item px-4 py-3 block">
-                <div class="text-sm text-gray-300 line-clamp-1">{{ comment.content }}</div>
-                <div class="text-xs text-gray-600 mt-0.5">{{ comment.date }} · {{ (comment.post_text[:30] + '…') if comment.post_text and comment.post_text|length > 30 else (comment.post_text or '未知帖子') }}</div>
+            <a href="/post/{{ comment.post_id }}?user_id={{ user_id }}" class="list-item px-4 py-3 block" onclick="haptic('light')">
+                <div class="text-sm line-clamp-1" style="color:var(--tg-text)">{{ comment.content }}</div>
+                <div class="text-xs mt-0.5" style="color:var(--tg-hint)">{{ comment.date }} · {{ (comment.post_text[:30] + '…') if comment.post_text and comment.post_text|length > 30 else (comment.post_text or '未知帖子') }}</div>
             </a>
             {% endfor %}
             {% else %}
-            <div class="px-4 py-8 text-center text-gray-600 text-sm">暂无评论</div>
+            <div class="px-4 py-8 text-center text-sm" style="color:var(--tg-hint)">暂无评论</div>
             {% endif %}
         </div>
 
@@ -123,12 +138,12 @@
 
     <nav class="bottom-nav fixed bottom-0 left-0 right-0">
         <div class="flex h-16 max-w-2xl mx-auto">
-            <a href="/?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5">
+            <a href="/?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5" onclick="haptic('light')">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
                 <span class="text-[10px]">首页</span>
                 <span class="nav-dot"></span>
             </a>
-            <a href="/favorites?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5">
+            <a href="/favorites?user_id={{ user_id }}" class="nav-tab flex-1 flex flex-col items-center justify-center gap-0.5" onclick="haptic('light')">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
                 <span class="text-[10px]">收藏</span>
                 <span class="nav-dot"></span>
@@ -143,6 +158,7 @@
 
     <script>
         function getUserId() {
+            try { const tg=window.Telegram&&window.Telegram.WebApp; if(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user&&tg.initDataUnsafe.user.id) return 'tg_'+tg.initDataUnsafe.user.id; } catch(e){}
             let uid = localStorage.getItem('user_id');
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
@@ -151,7 +167,6 @@
         const el = document.getElementById('uidDisplay');
         if (el) el.textContent = 'ID: ' + uid.substring(0,16) + '…';
 
-        // 显示加入时间（首次访问时间）
         const joinEl = document.getElementById('joinDisplay');
         if (joinEl) {
             let joinDate = localStorage.getItem('m_join_date');
@@ -168,7 +183,9 @@
         document.getElementById('blacklistCount').textContent = blacklisted.length;
 
         function clearAllData() {
+            haptic('medium');
             if (!confirm('确定要清除所有本地数据吗？包括点赞、收藏、拉黑记录。')) return;
+            haptic('error');
             ['m_liked','m_blacklisted','m_favorites'].forEach(k => localStorage.removeItem(k));
             alert('数据已清除');
             location.reload();

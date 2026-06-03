@@ -2,8 +2,9 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Matrix Hub</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -13,9 +14,11 @@
             --surface: #101018;
             --surface2: #17172a;
             --border: rgba(167,139,250,0.12);
+            --tg-text: #e5e7eb;
+            --tg-hint: #6b7280;
         }
         * { -webkit-tap-highlight-color: transparent; }
-        body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        body { background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--tg-text); }
 
         /* 顶部导航 */
         .top-nav {
@@ -102,10 +105,24 @@
         .post-card:nth-child(5)  { animation-delay: 0.20s; }
         .post-card:nth-child(n+6){ animation-delay: 0.24s; }
 
-        /* 媒体占位 */
+        /* 媒体占位 & 懒加载 */
         .media-placeholder {
             background: linear-gradient(135deg, #1a1a2e 0%, #0d1120 100%);
         }
+        /* 懒加载图片 shimmer 骨架屏 */
+        .img-lazy {
+            opacity: 0;
+            transition: opacity 0.35s ease;
+        }
+        .img-lazy.loaded { opacity: 1; }
+        .img-skeleton {
+            position: absolute; inset: 0;
+            background: linear-gradient(90deg, #1a1a2e 25%, #222240 50%, #1a1a2e 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.4s infinite;
+        }
+        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
         /* 视频角标 */
         .video-badge {
             position: absolute; bottom: 5px; right: 5px;
@@ -116,6 +133,19 @@
             color: #fff;
             letter-spacing: 0.5px;
         }
+
+        /* 下拉刷新指示器 */
+        #ptr-indicator {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            height: 0; overflow: hidden;
+            background: rgba(8,8,15,0.95);
+            backdrop-filter: blur(16px);
+            transition: height 0.2s ease;
+            color: var(--accent); font-size: 13px;
+        }
+        #ptr-indicator.active { height: 52px; }
+        #ptr-indicator svg { animation: spin 0.9s linear infinite; }
 
         /* 底部导航 */
         .bottom-nav {
@@ -149,7 +179,42 @@
         @keyframes spin { to { transform: rotate(360deg); } }
     </style>
     <script>
+        // ── Telegram WebApp 初始化 ────────────────────────────────────────────
+        (function() {
+            const tg = window.Telegram && window.Telegram.WebApp;
+            if (!tg) return;
+            tg.ready();
+            tg.expand();
+            const tp = tg.themeParams || {};
+            const root = document.documentElement;
+            if (tp.bg_color)           { root.style.setProperty('--bg',      tp.bg_color); root.style.setProperty('--surface', tp.bg_color); }
+            if (tp.secondary_bg_color) { root.style.setProperty('--surface', tp.secondary_bg_color); root.style.setProperty('--surface2', tp.secondary_bg_color); }
+            if (tp.text_color)         { root.style.setProperty('--tg-text', tp.text_color); }
+            if (tp.hint_color)         { root.style.setProperty('--tg-hint', tp.hint_color); }
+            if (tp.link_color)         { root.style.setProperty('--accent',  tp.link_color); }
+            if (tp.button_color)       { root.style.setProperty('--accent2', tp.button_color); }
+            if (tp.section_separator_color) root.style.setProperty('--border', tp.section_separator_color + '30');
+        })();
+
+        function haptic(type) {
+            try {
+                const hf = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback;
+                if (!hf) return;
+                if (type === 'light')    hf.impactOccurred('light');
+                else if (type === 'medium') hf.impactOccurred('medium');
+                else if (type === 'select') hf.selectionChanged();
+                else if (type === 'success') hf.notificationOccurred('success');
+            } catch(e) {}
+        }
+
         function getUserId() {
+            // Prefer Telegram user id if in Mini App context
+            try {
+                const tg = window.Telegram && window.Telegram.WebApp;
+                if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) {
+                    return 'tg_' + tg.initDataUnsafe.user.id;
+                }
+            } catch(e) {}
             let uid = localStorage.getItem('user_id');
             if (!uid) {
                 uid = 'user_' + Math.random().toString(36).substring(2, 11);
@@ -169,6 +234,7 @@
 
             document.querySelectorAll('.post-card[data-post-id]').forEach(card => {
                 card.onclick = function() {
+                    haptic('light');
                     const pid = this.dataset.postId;
                     let url = '/post/' + encodeURIComponent(pid) + '?user_id=' + encodeURIComponent(getUserId());
                     if (adminKey) url += '&admin_key=' + encodeURIComponent(adminKey);
@@ -177,6 +243,8 @@
             });
 
             initInfiniteScroll();
+            _lazyObserver = initLazyImages();
+            initPullToRefresh();
         };
 
         // ── 无限滚动 ──────────────────────────────────────────────────────────
@@ -191,7 +259,7 @@
             let thumbHTML = '';
             if (media && isVideo) {
                 if (post.thumbnail) {
-                    thumbHTML = `<img src="${post.thumbnail}" class="w-full h-full object-cover" alt="">`;
+                    thumbHTML = `<div class="img-skeleton"></div><img data-src="${post.thumbnail}" class="img-lazy w-full h-full object-cover" alt="">`;
                 } else {
                     thumbHTML = `<div class="media-placeholder w-full h-full flex items-center justify-center">
                         <svg class="w-8 h-8 text-purple-500/50" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -199,8 +267,8 @@
                 }
                 thumbHTML += `<span class="video-badge">▶ 视频</span>`;
             } else if (media && isImage) {
-                thumbHTML = `<img src="${media}" class="w-full h-full object-cover" alt=""
-                    onerror="this.parentElement.innerHTML='<div class=\\'media-placeholder w-full h-full\\'></div>'">`;
+                thumbHTML = `<div class="img-skeleton"></div><img data-src="${media}" class="img-lazy w-full h-full object-cover" alt=""
+                    onerror="this.parentElement.querySelector('.img-skeleton')&&this.parentElement.querySelector('.img-skeleton').remove();this.parentElement.innerHTML='<div class=\\'media-placeholder w-full h-full\\'></div>'">`;
             } else {
                 thumbHTML = `<div class="media-placeholder w-full h-full flex items-center justify-center">
                     <svg class="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -214,16 +282,16 @@
             const bodyText = post.text || '查看详情 →';
 
             return `<div class="post-card rounded-2xl overflow-hidden cursor-pointer flex" data-post-id="${post.id}" style="animation:card-in 0.4s ease both">
-                <div class="relative w-28 aspect-square flex-shrink-0">
+                <div class="relative w-28 aspect-square flex-shrink-0 overflow-hidden">
                     ${thumbHTML}
                 </div>
                 <div class="flex-1 p-3 flex flex-col min-w-0 justify-between">
                     <div>
                         ${title}
-                        <p class="text-gray-200 text-sm leading-relaxed ${textClamp} break-words whitespace-pre-wrap">${bodyText}</p>
+                        <p class="text-sm leading-relaxed ${textClamp} break-words whitespace-pre-wrap" style="color:var(--tg-text)">${bodyText}</p>
                     </div>
                     <div class="flex items-center justify-between mt-2">
-                        <span class="text-gray-600 text-xs">${post.date}</span>
+                        <span class="text-xs" style="color:var(--tg-hint)">${post.date}</span>
                         <div class="flex items-center gap-3 text-xs">
                             <span class="text-rose-400/80">♥ ${post.likes}</span>
                             <span class="text-blue-400/70">💬 ${post.comment_count}</span>
@@ -231,6 +299,65 @@
                     </div>
                 </div>
             </div>`;
+        }
+
+        // ── 懒加载图片 ────────────────────────────────────────────────────────
+        function initLazyImages() {
+            const obs = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    const img = entry.target;
+                    if (img.dataset.src) {
+                        img.src = img.dataset.src;
+                        img.removeAttribute('data-src');
+                        img.onload = () => {
+                            img.classList.add('loaded');
+                            const sk = img.previousElementSibling;
+                            if (sk && sk.classList.contains('img-skeleton')) sk.remove();
+                        };
+                        img.onerror = () => {
+                            const sk = img.previousElementSibling;
+                            if (sk && sk.classList.contains('img-skeleton')) sk.remove();
+                        };
+                    }
+                    observer.unobserve(img);
+                });
+            }, { rootMargin: '150px' });
+            document.querySelectorAll('img.img-lazy[data-src]').forEach(img => obs.observe(img));
+            return obs;
+        }
+
+        let _lazyObserver = null;
+
+        // ── 下拉刷新 ──────────────────────────────────────────────────────────
+        function initPullToRefresh() {
+            let startY = 0, pulling = false, threshold = 70;
+            const ind = document.getElementById('ptr-indicator');
+            if (!ind) return;
+
+            document.addEventListener('touchstart', e => {
+                if (window.scrollY === 0 && e.touches[0].clientY < 80) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', e => {
+                if (!pulling) return;
+                const dy = e.touches[0].clientY - startY;
+                if (dy > 10) ind.classList.add('active');
+            }, { passive: true });
+
+            document.addEventListener('touchend', e => {
+                if (!pulling) return;
+                pulling = false;
+                const dy = e.changedTouches[0].clientY - startY;
+                ind.classList.remove('active');
+                if (dy > threshold) {
+                    haptic('medium');
+                    location.reload();
+                }
+            });
         }
 
         function initInfiniteScroll() {
@@ -263,6 +390,7 @@
                         div.innerHTML = buildCardHTML(post);
                         const card = div.firstElementChild;
                         card.onclick = function() {
+                            haptic('light');
                             let url = '/post/' + post.id + '?user_id=' + encodeURIComponent(getUserId());
                             if (adminKey) url += '&admin_key=' + encodeURIComponent(adminKey);
                             location.href = url;
@@ -274,6 +402,10 @@
                         const sentinel = document.getElementById('scroll-sentinel');
                         if (sentinel) sentinel.remove();
                     }
+                    // lazy-load newly added images
+                    if (_lazyObserver) {
+                        list.querySelectorAll('img.img-lazy[data-src]').forEach(img => _lazyObserver.observe(img));
+                    }
                 })
                 .catch(console.error)
                 .finally(() => {
@@ -284,7 +416,15 @@
         }
     </script>
 </head>
-<body class="min-h-screen text-white pb-20">
+<body class="min-h-screen pb-20" style="color:var(--tg-text)">
+
+    <!-- 下拉刷新指示器 -->
+    <div id="ptr-indicator">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span>松开刷新</span>
+    </div>
 
     <!-- 顶部导航 -->
     <nav class="top-nav sticky top-0 z-50 px-4 h-14 flex items-center justify-between">
@@ -344,15 +484,16 @@
             <div class="post-card rounded-2xl overflow-hidden cursor-pointer flex"
                  data-post-id="{{ post.id }}">
 
-                <!-- 媒体缩略图 -->
-                <div class="relative w-28 aspect-square flex-shrink-0">
+                    <!-- 媒体缩略图 -->
+                <div class="relative w-28 aspect-square flex-shrink-0 overflow-hidden">
                     {% set media = post.first_media or '' %}
                     {% set is_video = media.lower().endswith('.mp4') or media.lower().endswith('.mov') %}
                     {% set is_image = media.lower().endswith('.jpg') or media.lower().endswith('.jpeg') or media.lower().endswith('.png') or media.lower().endswith('.gif') or media.lower().endswith('.webp') %}
 
                     {% if media and is_video %}
                         {% if post.thumbnail %}
-                        <img src="{{ post.thumbnail }}" class="w-full h-full object-cover" alt="">
+                        <div class="img-skeleton"></div>
+                        <img data-src="{{ post.thumbnail }}" class="img-lazy w-full h-full object-cover" alt="">
                         {% else %}
                         <div class="media-placeholder w-full h-full flex items-center justify-center">
                             <svg class="w-8 h-8 text-purple-500/50" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -360,8 +501,9 @@
                         {% endif %}
                         <span class="video-badge">▶ 视频</span>
                     {% elif media and is_image %}
-                        <img src="{{ media }}" class="w-full h-full object-cover" alt=""
-                             onerror="this.parentElement.innerHTML='<div class=\'media-placeholder w-full h-full flex items-center justify-center\'><span class=\'text-gray-600 text-xs\'>无图</span></div>'">
+                        <div class="img-skeleton"></div>
+                        <img data-src="{{ media }}" class="img-lazy w-full h-full object-cover" alt=""
+                             onerror="this.previousElementSibling&&this.previousElementSibling.remove();this.parentElement.innerHTML='<div class=\'media-placeholder w-full h-full flex items-center justify-center\'><span class=\'text-gray-600 text-xs\'>无图</span></div>'">
                     {% else %}
                         <div class="media-placeholder w-full h-full flex items-center justify-center">
                             <svg class="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,14 +517,14 @@
                 <div class="flex-1 p-3 flex flex-col min-w-0 justify-between">
                     <div>
                         {% if post.title %}
-                        <p class="text-white text-sm font-bold leading-snug mb-1 truncate">{{ post.title }}</p>
+                        <p class="text-sm font-bold leading-snug mb-1 truncate" style="color:var(--tg-text)">{{ post.title }}</p>
                         {% endif %}
-                        <p class="text-gray-200 text-sm leading-relaxed {% if post.title %}line-clamp-2{% else %}line-clamp-4{% endif %} break-words whitespace-pre-wrap">
+                        <p class="text-sm leading-relaxed {% if post.title %}line-clamp-2{% else %}line-clamp-4{% endif %} break-words whitespace-pre-wrap" style="color:var(--tg-text);opacity:0.85">
                             {{ post.text if post.text else '查看详情 →' }}
                         </p>
                     </div>
                     <div class="flex items-center justify-between mt-2">
-                        <span class="text-gray-600 text-xs">{{ post.date }}</span>
+                        <span class="text-xs" style="color:var(--tg-hint)">{{ post.date }}</span>
                         <div class="flex items-center gap-3 text-xs">
                             <span class="text-rose-400/80">♥ {{ post.likes or 0 }}</span>
                             <span class="text-blue-400/70">💬 {{ post.comment_count or 0 }}</span>
