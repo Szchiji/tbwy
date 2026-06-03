@@ -369,8 +369,8 @@ def webhook():
     return 'OK'
 
 # --- 路由渲染 ---
-def _build_post_query_conditions(type_filter, sort):
-    """根据类型过滤和排序参数构建 SQL 片段（均来自服务端枚举，非用户原始输入）。"""
+def _build_post_query_conditions(type_filter, sort, source=''):
+    """根据类型过滤、来源过滤和排序参数构建 SQL 片段（均来自服务端枚举，非用户原始输入）。"""
     if type_filter == 'video':
         type_condition = " AND (p.first_media LIKE '%.mp4' OR p.first_media LIKE '%.mov')"
     elif type_filter == 'image':
@@ -379,8 +379,14 @@ def _build_post_query_conditions(type_filter, sort):
                          " OR p.first_media LIKE '%.webp')"
     else:
         type_condition = ""
+    if source == 'official':
+        source_condition = " AND p.title = '官方'"
+    elif source == 'user':
+        source_condition = " AND p.title = '投稿'"
+    else:
+        source_condition = ""
     order_clause = "p.likes DESC, p.id DESC" if sort == 'hot' else "p.id DESC"
-    return type_condition, order_clause
+    return type_condition, source_condition, order_clause
 
 @app.route('/')
 def index():
@@ -389,9 +395,10 @@ def index():
     page = request.args.get('page', 1, type=int)
     type_filter = request.args.get('type', '')
     sort = request.args.get('sort', 'latest')
+    source = request.args.get('source', '')
     per_page = 20
     offset = (page - 1) * per_page
-    type_condition, order_clause = _build_post_query_conditions(type_filter, sort)
+    type_condition, source_condition, order_clause = _build_post_query_conditions(type_filter, sort, source)
     
     with get_db() as conn:
         notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
@@ -400,7 +407,7 @@ def index():
                  FROM posts p 
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                 {type_condition}
+                 {type_condition}{source_condition}
                  GROUP BY COALESCE(p.media_group_id, p.id) 
                  ORDER BY {order_clause}
                  LIMIT ? OFFSET ?"""
@@ -410,13 +417,13 @@ def index():
         count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
                        WHERE p.is_approved=1 AND p.text LIKE ? 
                        AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                       {type_condition}"""
+                       {type_condition}{source_condition}"""
         total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
         
     return render_template('index.html', posts=posts, notice=notice['value'] if notice else "", 
                          q=q, user_id=user_id, page=page,
                          total_pages=(total + per_page - 1) // per_page,
-                         type_filter=type_filter, sort=sort)
+                         type_filter=type_filter, sort=sort, source=source)
 
 @app.route('/api/posts')
 def api_posts():
@@ -426,16 +433,17 @@ def api_posts():
     page = request.args.get('page', 1, type=int)
     type_filter = request.args.get('type', '')
     sort = request.args.get('sort', 'latest')
+    source = request.args.get('source', '')
     per_page = 20
     offset = (page - 1) * per_page
-    type_condition, order_clause = _build_post_query_conditions(type_filter, sort)
+    type_condition, source_condition, order_clause = _build_post_query_conditions(type_filter, sort, source)
 
     with get_db() as conn:
         sql = f"""SELECT p.*, (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS comment_count
                  FROM posts p 
                  WHERE p.is_approved=1 AND p.text LIKE ? 
                  AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                 {type_condition}
+                 {type_condition}{source_condition}
                  GROUP BY COALESCE(p.media_group_id, p.id) 
                  ORDER BY {order_clause}
                  LIMIT ? OFFSET ?"""
@@ -444,7 +452,7 @@ def api_posts():
         count_sql = f"""SELECT COUNT(DISTINCT COALESCE(p.media_group_id, p.id)) AS total FROM posts p 
                        WHERE p.is_approved=1 AND p.text LIKE ? 
                        AND p.id NOT IN (SELECT post_id FROM user_blacklist WHERE user_id=?)
-                       {type_condition}"""
+                       {type_condition}{source_condition}"""
         total = conn.execute(count_sql, (f'%{q}%', user_id)).fetchone()['total']
 
     total_pages = (total + per_page - 1) // per_page
@@ -457,6 +465,7 @@ def api_posts():
         'first_media': p['first_media'] or '',
         'thumbnail': p['thumbnail'] or '',
         'comment_count': p['comment_count'] or 0,
+        'custom_description': p['custom_description'] or '',
     } for p in posts]
     return jsonify({'posts': posts_data, 'total_pages': total_pages, 'page': page, 'has_more': page < total_pages})
 
@@ -567,6 +576,13 @@ def favorites_page():
             ORDER BY f.date DESC
         """, (user_id,)).fetchall()
     return render_template('favorites.html', posts=posts, notice=notice['value'] if notice else "", user_id=user_id)
+
+@app.route('/upload')
+def upload_guide():
+    user_id = request.args.get('user_id', 'anonymous')
+    with get_db() as conn:
+        notice = conn.execute("SELECT value FROM settings WHERE key='notice'").fetchone()
+    return render_template('upload.html', user_id=user_id, notice=notice['value'] if notice else "")
 
 @app.route('/profile')
 def profile():
