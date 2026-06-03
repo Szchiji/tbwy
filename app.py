@@ -1077,9 +1077,14 @@ def my_submissions():
             """, (tg_numeric,)).fetchall()
     return render_template('my_submissions.html', submissions=submissions, user_id=user_id)
 
-if __name__ == '__main__':
-    # 自动设置 Webhook
-    if BASE_URL and BOT_TOKEN:
+# 自动设置 Webhook（模块级别，gunicorn 加载时也会执行）
+if BASE_URL and BOT_TOKEN:
+    try:
         bot.remove_webhook()
         bot.set_webhook(url=f"{BASE_URL}/webhook")
+        print(f"Webhook registered: {BASE_URL}/webhook")
+    except Exception as e:
+        print(f"Warning: Failed to set webhook: {e}")
+
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
