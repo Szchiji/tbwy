@@ -110,6 +110,47 @@
                         <span class="slider"></span>
                     </label>
                 </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium">🤖 AI 内容审核</p>
+                        <p class="text-xs mt-0.5" style="color:var(--hint)">开启后对投稿进行 AI 质量评分</p>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enable_ai_review" {% if settings.get('enable_ai_review','0')=='1' %}checked{% endif %} onchange="saveToggle('enable_ai_review', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI 审核设置 -->
+        <div class="card p-5 mb-4">
+            <p class="section-title">🤖 AI 审核阈值</p>
+            <p class="text-xs mb-3" style="color:var(--hint)">低于阈值的投稿将在 Bot 投稿引导流程中自动拒绝（需开启 AI 内容审核）。</p>
+            <div class="flex items-center gap-3">
+                <input id="ai_reject_threshold" class="input" type="number" min="0" max="100"
+                    value="{{ settings.get('ai_reject_threshold','30') }}" placeholder="30" style="flex:1">
+                <span class="text-sm" style="color:var(--hint)">/ 100</span>
+                <button onclick="saveAiSettings()" class="btn-primary px-5">保存</button>
+            </div>
+        </div>
+
+        <!-- 星光值信用分布 -->
+        <div class="card p-5 mb-4">
+            <p class="section-title">⭐ 星光值分布</p>
+            <div class="grid grid-cols-3 gap-2" id="creditDistribution">
+                <div class="stat-box text-center py-3">
+                    <div class="text-lg font-black text-purple-400" id="cd-avg">—</div>
+                    <div class="text-[11px] mt-1" style="color:var(--hint)">平均分</div>
+                </div>
+                <div class="stat-box text-center py-3">
+                    <div class="text-lg font-black text-green-400" id="cd-high">—</div>
+                    <div class="text-[11px] mt-1" style="color:var(--hint)">≥200 人数</div>
+                </div>
+                <div class="stat-box text-center py-3">
+                    <div class="text-lg font-black text-red-400" id="cd-low">—</div>
+                    <div class="text-[11px] mt-1" style="color:var(--hint)">&lt;50 人数</div>
+                </div>
             </div>
         </div>
 
@@ -154,7 +195,10 @@
                         {% endif %}
                         <div class="flex-1 min-w-0">
                             <p class="text-sm line-clamp-2" style="color:var(--text)">{{ post.text or '（无说明文字）' }}</p>
-                            <p class="text-xs mt-1" style="color:var(--hint)">用户 {{ post.user_id }} · {{ post.date }}</p>
+                            <p class="text-xs mt-1" style="color:var(--hint)">
+                                用户 {{ post.user_id }} · {{ post.date }}
+                                {% if post.ai_score is not none %}<span class="ml-2" style="color:{% if post.ai_score >= 60 %}#4ade80{% elif post.ai_score >= 30 %}#fbbf24{% else %}#f87171{% endif %}">🤖 AI: {{ post.ai_score | round(0) | int }}/100</span>{% endif %}
+                            </p>
                         </div>
                     </div>
                     <div class="flex gap-2 mt-2">
@@ -278,6 +322,27 @@
                 showToast('已拒绝并删除');
             } else showToast(r.message || '操作失败', false);
         }
+
+        async function saveAiSettings() {
+            const threshold = document.getElementById('ai_reject_threshold').value.trim();
+            const r = await apiPost('/api/admin/settings', {ai_reject_threshold: threshold});
+            if (r.status === 'ok') showToast('AI 阈值已保存');
+            else showToast(r.message || '保存失败', false);
+        }
+
+        // Load credit distribution stats
+        (function() {
+            fetch('/api/admin/settings?admin_key=' + encodeURIComponent(ADMIN_KEY))
+                .then(r => r.json()).catch(() => null);
+            fetch('/api/credit/stats?admin_key=' + encodeURIComponent(ADMIN_KEY))
+                .then(r => r.json())
+                .then(d => {
+                    if (!d || d.status !== 'ok') return;
+                    document.getElementById('cd-avg').textContent = d.avg_score !== null ? Math.round(d.avg_score) : '—';
+                    document.getElementById('cd-high').textContent = d.high_count;
+                    document.getElementById('cd-low').textContent = d.low_count;
+                }).catch(() => {});
+        })();
     </script>
 </body>
 </html>

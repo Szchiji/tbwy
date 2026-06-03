@@ -98,6 +98,35 @@
             </div>
         </div>
 
+        <!-- 星光值信用卡片 -->
+        {% if tg_user %}
+        <div class="section-card rounded-2xl p-4 mb-5 fade-in-2" id="creditCard" style="display:none">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-sm font-bold" style="color:var(--tg-text)">⭐ 星光值</span>
+                <span id="tierBadge" class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(167,139,250,0.15);color:var(--accent);border:1px solid rgba(167,139,250,0.3)"></span>
+            </div>
+            <div class="flex items-end gap-2 mb-2">
+                <span id="creditScore" class="text-3xl font-black" style="color:var(--accent)">—</span>
+                <span class="text-xs mb-1" style="color:var(--tg-hint)">星光值</span>
+            </div>
+            <!-- 进度条：到下一等级 -->
+            <div id="progressWrap" style="display:none" class="mb-3">
+                <div class="flex justify-between text-[10px] mb-1" style="color:var(--tg-hint)">
+                    <span>距 <span id="nextTierName"></span></span>
+                    <span><span id="neededPts"></span> 点</span>
+                </div>
+                <div class="w-full rounded-full h-1.5" style="background:rgba(167,139,250,0.12)">
+                    <div id="progressBar" class="h-1.5 rounded-full" style="background:linear-gradient(90deg,#a78bfa,#38bdf8);width:0%;transition:width .6s"></div>
+                </div>
+            </div>
+            <!-- 近期变动 -->
+            <div id="creditHistoryWrap" style="display:none">
+                <div class="text-[10px] mb-1.5 font-semibold" style="color:var(--tg-hint)">近期变动</div>
+                <div id="creditHistoryList" class="space-y-1"></div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- 我的投稿 -->
         {% if submissions %}
         <div class="section-card rounded-2xl overflow-hidden mb-4 fade-in-2">
@@ -201,6 +230,9 @@
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
         }
+        function getInitData() {
+            try { return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || ''; } catch(e) { return ''; }
+        }
 
         // Auto Telegram login — register TG user with server on every visit
         (function() {
@@ -216,7 +248,8 @@
                         username: u.username || '',
                         first_name: u.first_name || '',
                         last_name: u.last_name || '',
-                        photo_url: u.photo_url || ''
+                        photo_url: u.photo_url || '',
+                        init_data: tg.initData || ''
                     })
                 }).then(r => r.json()).then(data => {
                     if (data.user_id) {
@@ -268,6 +301,47 @@
             alert('数据已清除');
             location.reload();
         }
+
+        // ── 星光值信用卡片 ────────────────────────────────────────────
+        (function() {
+            const userId = getUserId();
+            if (!userId.startsWith('tg_')) return;
+            fetch('/api/credit?user_id=' + encodeURIComponent(userId))
+                .then(r => r.json())
+                .then(d => {
+                    if (d.status !== 'ok') return;
+                    const card = document.getElementById('creditCard');
+                    if (!card) return;
+                    card.style.display = '';
+                    document.getElementById('creditScore').textContent = d.score;
+                    document.getElementById('tierBadge').textContent = d.tier.icon + ' ' + d.tier.name;
+                    // Progress bar to next tier
+                    if (d.next_tier) {
+                        const wrap = document.getElementById('progressWrap');
+                        wrap.style.display = '';
+                        document.getElementById('nextTierName').textContent = d.next_tier.icon + ' ' + d.next_tier.name;
+                        document.getElementById('neededPts').textContent = d.next_tier.needed;
+                        const range = d.next_tier.min_score - d.tier.min_score;
+                        const gained = d.score - d.tier.min_score;
+                        const pct = range > 0 ? Math.min(100, Math.round(gained / range * 100)) : 100;
+                        setTimeout(() => { document.getElementById('progressBar').style.width = pct + '%'; }, 100);
+                    }
+                    // Recent history
+                    if (d.history && d.history.length) {
+                        const histWrap = document.getElementById('creditHistoryWrap');
+                        histWrap.style.display = '';
+                        const list = document.getElementById('creditHistoryList');
+                        list.innerHTML = d.history.slice().reverse().map(h => {
+                            const sign = h.delta >= 0 ? '+' : '';
+                            const color = h.delta >= 0 ? '#4ade80' : '#f87171';
+                            return `<div class="flex justify-between text-xs" style="color:var(--tg-hint)">
+                                <span>${h.desc}</span>
+                                <span style="color:${color};font-weight:700">${sign}${h.delta}</span>
+                            </div>`;
+                        }).join('');
+                    }
+                }).catch(() => {});
+        })();
     </script>
 </body>
 </html>

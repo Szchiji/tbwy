@@ -478,6 +478,9 @@
             if (!uid) { uid = 'user_' + Math.random().toString(36).substring(2,11); localStorage.setItem('user_id', uid); }
             return uid;
         }
+        function getInitData() {
+            try { return (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) || ''; } catch(e) { return ''; }
+        }
         function getBlacklistedItems() { return JSON.parse(localStorage.getItem('m_blacklisted') || '[]'); }
         function addToBlacklist(id) { let b = getBlacklistedItems(); b.push(id); localStorage.setItem('m_blacklisted', JSON.stringify(b)); }
 
@@ -693,7 +696,10 @@
         function handleLike() {
             let liked = JSON.parse(localStorage.getItem('m_liked') || '[]');
             if (liked.includes(pid)) { haptic('light'); return showToast('您已经点过赞啦！'); }
-            fetch('/api/like/'+pid, {method:'POST'}).then(res => {
+            fetch('/api/like/'+pid, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({user_id: getUserId(), init_data: getInitData()})
+            }).then(res => {
                 if (res.ok) {
                     haptic('success');
                     liked.push(pid); localStorage.setItem('m_liked', JSON.stringify(liked));
@@ -733,7 +739,7 @@
             fetch('/api/favorite/'+pid, {
                 method: isFavorited ? 'DELETE' : 'POST',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({user_id: getUserId()})
+                body: JSON.stringify({user_id: getUserId(), init_data: getInitData()})
             }).then(r => r.json()).then(d => {
                 if (d.status === 'ok') {
                     haptic(isFavorited ? 'light' : 'success');
@@ -792,7 +798,7 @@
             btn.disabled = true;
             fetch('/api/comment/'+pid, {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({content: val, user_id: getUserId()})
+                body: JSON.stringify({content: val, user_id: getUserId(), init_data: getInitData()})
             }).then(r => r.json()).then(d => {
                 if (d.status === 'ok' && d.id) {
                     haptic('success');

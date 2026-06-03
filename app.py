@@ -1,9 +1,11 @@
-import os, sqlite3, requests, telebot, datetime, mimetypes, cv2, html
+import os, sqlite3, requests, telebot, datetime, mimetypes, cv2, html, hmac, hashlib, json
 from flask import Flask, request, render_template, jsonify, send_from_directory
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from datetime import datetime
 from collections import defaultdict
 import time
+from credit import get_credit_tier, format_tier_badge, next_tier_info, add_credit_event
+from ai import score_photo_authenticity
 
 # 环境与类型配置
 mimetypes.add_type('video/mp4', '.mp4')
@@ -42,6 +44,32 @@ def check_rate_limit(identifier, max_requests=10, window_seconds=60):
     # 增加计数
     limit_data['count'] += 1
     return True
+
+def verify_telegram_data(init_data_str: str) -> bool:
+    """Verify Telegram WebApp initData HMAC-SHA256 signature.
+    
+    Returns True in dev mode (ENV=dev), or when signature is valid.
+    Returns False if the signature is missing or invalid in production.
+    """
+    if os.environ.get('ENV') == 'dev':
+        return True
+    if not BOT_TOKEN or not init_data_str:
+        return False
+    try:
+        params = dict(
+            kv.split('=', 1) for kv in init_data_str.split('&') if '=' in kv
+        )
+        data_hash = params.pop('hash', None)
+        if not data_hash:
+            return False
+        data_check_string = '\n'.join(
+            f'{k}={v}' for k, v in sorted(params.items())
+        )
+        secret_key = hmac.new(b'WebAppData', BOT_TOKEN.encode(), hashlib.sha256).digest()
+        computed = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(computed, data_hash)
+    except Exception:
+        return False
 
 # 路径配置 (适配 Railway Volume)
 DB_DIR = '/app/data' if os.path.exists('/app/data') else 'data'
@@ -112,6 +140,12 @@ def init_db():
                 photo_url TEXT,
                 registered_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS bot_states (
+                user_id INTEGER PRIMARY KEY,
+                state TEXT DEFAULT 'idle',
+                data TEXT DEFAULT '{}',
+                updated_at TEXT
+            );
             CREATE INDEX IF NOT EXISTS idx_posts_approved ON posts(is_approved);
             CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date DESC);
             CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
@@ -123,6 +157,8 @@ def init_db():
             INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_submissions', '1');
             INSERT OR IGNORE INTO settings (key, value) VALUES ('submission_notice', '');
             INSERT OR IGNORE INTO settings (key, value) VALUES ('accent_color', '#a78bfa');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_ai_review', '0');
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('ai_reject_threshold', '30');
         ''')
         
         # 字段自动迁移逻辑 (安全处理旧数据库)
@@ -148,12 +184,28 @@ def init_db():
         if 'tags' not in columns:
             try: conn.execute("ALTER TABLE posts ADD COLUMN tags TEXT DEFAULT ''")
             except: pass
+        if 'ai_score' not in columns:
+            try: conn.execute("ALTER TABLE posts ADD COLUMN ai_score REAL")
+            except: pass
         
         # 迁移 comments 表的 user_id 字段
         cursor = conn.execute("PRAGMA table_info(comments)")
         comment_columns = [c[1] for c in cursor.fetchall()]
         if 'user_id' not in comment_columns:
             try: conn.execute("ALTER TABLE comments ADD COLUMN user_id TEXT")
+            except: pass
+
+        # 迁移 users 表的信用/速率字段
+        cursor = conn.execute("PRAGMA table_info(users)")
+        user_columns = [c[1] for c in cursor.fetchall()]
+        if 'credit_score' not in user_columns:
+            try: conn.execute("ALTER TABLE users ADD COLUMN credit_score INTEGER DEFAULT 100")
+            except: pass
+        if 'credit_history' not in user_columns:
+            try: conn.execute("ALTER TABLE users ADD COLUMN credit_history TEXT DEFAULT '[]'")
+            except: pass
+        if 'rate_timestamps' not in user_columns:
+            try: conn.execute("ALTER TABLE users ADD COLUMN rate_timestamps TEXT DEFAULT '{}'")
             except: pass
 
 init_db()
@@ -269,6 +321,14 @@ def webhook():
                     if action == 'y':
                         sql = "UPDATE posts SET is_approved=1 WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
                         conn.execute(sql, (target[1:] if target.startswith('G') else target,))
+                        # Award +15 credit to post author
+                        post_id_val = target[1:] if target.startswith('G') else target
+                        if target.startswith('G'):
+                            author_row = conn.execute("SELECT user_id FROM posts WHERE media_group_id=? LIMIT 1", (post_id_val,)).fetchone()
+                        else:
+                            author_row = conn.execute("SELECT user_id FROM posts WHERE id=?", (post_id_val,)).fetchone()
+                        if author_row and author_row['user_id']:
+                            add_credit_event(conn, str(author_row['user_id']), 'post_approved')
                         bot.answer_callback_query(update.callback_query.id, "审核通过")
                     else:
                         sql = "DELETE FROM posts WHERE " + ("media_group_id=?" if target.startswith('G') else "id=?")
@@ -371,7 +431,153 @@ def webhook():
             with get_db() as conn:
                 if conn.execute("SELECT 1 FROM blacklist WHERE user_id=?", (uid,)).fetchone(): return 'OK'
 
-        # 4. 入库处理
+        # 4. FSM 分步投稿引导（仅对私聊用户消息，非频道帖）
+        if update.message and uid and str(uid) != str(MY_CHAT_ID):
+            with get_db() as conn:
+                state_row = conn.execute(
+                    "SELECT state, data FROM bot_states WHERE user_id=?", (uid,)
+                ).fetchone()
+            state = state_row['state'] if state_row else 'idle'
+            fsm_data = {}
+            try:
+                fsm_data = json.loads(state_row['data'] or '{}') if state_row else {}
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            def set_state(new_state, new_data=None):
+                payload = json.dumps(new_data or {}, ensure_ascii=False)
+                with get_db() as conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO bot_states (user_id, state, data, updated_at) VALUES (?,?,?,?)",
+                        (uid, new_state, payload, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    )
+
+            def clear_state():
+                with get_db() as conn:
+                    conn.execute("DELETE FROM bot_states WHERE user_id=?", (uid,))
+
+            # /start 命令 — 显示欢迎 + 开始投稿按钮
+            if txt in ('/start', '/投稿') or txt == '📸 开始投稿':
+                kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                kb.add(KeyboardButton('📸 开始投稿'))
+                if txt in ('/start',):
+                    bot.send_message(uid,
+                        "👋 欢迎使用 Matrix Hub 投稿机器人！\n\n"
+                        "点击下方按钮开始分步投稿，或直接发送图片/视频快速投稿。",
+                        reply_markup=kb)
+                    return 'OK'
+                # User tapped "开始投稿"
+                set_state('waiting_media')
+                bot.send_message(uid,
+                    "📷 请发送你想投稿的图片或视频：\n\n"
+                    "发送 /cancel 可随时取消。",
+                    reply_markup=ReplyKeyboardRemove())
+                return 'OK'
+
+            # /cancel 取消投稿
+            if txt == '/cancel':
+                if state != 'idle':
+                    clear_state()
+                    bot.send_message(uid, "✅ 已取消投稿。", reply_markup=ReplyKeyboardRemove())
+                else:
+                    bot.send_message(uid, "当前没有进行中的投稿。")
+                return 'OK'
+
+            # FSM: waiting_media — 等待用户发送图片/视频
+            if state == 'waiting_media':
+                if p.photo or p.video:
+                    path, thumbnail = download_media(p)
+                    if not path:
+                        bot.send_message(uid, "❌ 媒体下载失败，请重试。")
+                        return 'OK'
+                    # Optional AI scoring
+                    ai_score = None
+                    with get_db() as conn:
+                        enable_ai = get_setting(conn, 'enable_ai_review', '0')
+                        threshold = float(get_setting(conn, 'ai_reject_threshold', '30'))
+                    if enable_ai == '1' and path:
+                        full_url = f"{BASE_URL}{path}" if BASE_URL else path
+                        ai_score = score_photo_authenticity(full_url)
+                        if ai_score < threshold:
+                            clear_state()
+                            bot.send_message(uid,
+                                f"❌ 内容质量评分过低（{ai_score:.0f}/100），无法投稿。\n"
+                                "请确保内容清晰、原创，再重新投稿。",
+                                reply_markup=ReplyKeyboardRemove())
+                            return 'OK'
+                    set_state('waiting_description', {
+                        'media_path': path,
+                        'thumbnail': thumbnail or '',
+                        'ai_score': ai_score,
+                        'msg_id': p.message_id,
+                        'media_group_id': gid,
+                    })
+                    ai_note = f"\n\n🤖 AI 质量评分: {ai_score:.0f}/100" if ai_score is not None else ""
+                    bot.send_message(uid,
+                        f"✅ 媒体已收到！{ai_note}\n\n"
+                        "📝 请发送投稿描述（标签用 #标签 格式），或发送 . 跳过描述：",
+                        reply_markup=ReplyKeyboardRemove())
+                    return 'OK'
+                else:
+                    bot.send_message(uid, "⚠️ 请发送图片或视频，或发送 /cancel 取消。")
+                    return 'OK'
+
+            # FSM: waiting_description — 等待用户输入描述
+            if state == 'waiting_description':
+                description = txt if txt and txt != '.' else ''
+                fsm_data['description'] = description
+                set_state('waiting_confirm', fsm_data)
+                preview = f"📄 描述: {description}\n" if description else ""
+                kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                kb.row(KeyboardButton('✅ 确认投稿'), KeyboardButton('❌ 取消'))
+                bot.send_message(uid,
+                    f"📋 投稿预览：\n\n{preview}"
+                    "确认后将提交审核，管理员审核通过后即可发布。",
+                    reply_markup=kb)
+                return 'OK'
+
+            # FSM: waiting_confirm — 等待用户确认
+            if state == 'waiting_confirm':
+                if txt == '✅ 确认投稿':
+                    with get_db() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved, user_id, ai_score) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                            (
+                                fsm_data.get('msg_id', p.message_id),
+                                fsm_data.get('description', ''),
+                                '投稿',
+                                datetime.now().strftime("%Y-%m-%d"),
+                                fsm_data.get('media_group_id'),
+                                fsm_data.get('media_path'),
+                                fsm_data.get('thumbnail') or None,
+                                0,
+                                uid,
+                                fsm_data.get('ai_score'),
+                            )
+                        )
+                        new_id = cursor.lastrowid
+                    clear_state()
+                    markup = InlineKeyboardMarkup().row(
+                        InlineKeyboardButton("✅通过", callback_data=f"y_{new_id}"),
+                        InlineKeyboardButton("❌拒绝", callback_data=f"n_{new_id}")
+                    )
+                    desc_preview = (fsm_data.get('description') or '（无描述）')[:80]
+                    ai_note = f"\n🤖 AI评分: {fsm_data['ai_score']:.0f}" if fsm_data.get('ai_score') is not None else ""
+                    bot.send_message(MY_CHAT_ID,
+                        f"🔔 新投稿 (FSM):\n{desc_preview}{ai_note}\n👤 用户: {uid}",
+                        reply_markup=markup)
+                    bot.send_message(uid,
+                        "✅ 投稿已提交，等待审核！\n审核通过后将在平台上发布。",
+                        reply_markup=ReplyKeyboardRemove())
+                    return 'OK'
+                else:
+                    clear_state()
+                    bot.send_message(uid, "❌ 已取消投稿。", reply_markup=ReplyKeyboardRemove())
+                    return 'OK'
+
+        # 5. 入库处理（频道帖或直接发送媒体的快速投稿）
         path, thumbnail = download_media(p)
         if path:
             if (update.edited_channel_post or update.edited_message):
@@ -546,19 +752,31 @@ def detail(post_id):
 
 @app.route('/api/like/<int:post_id>', methods=['POST'])
 def like(post_id):
-    user_id = request.json.get('user_id', 'anonymous') if request.is_json else 'anonymous'
+    data = request.json or {}
+    user_id = data.get('user_id', 'anonymous')
+    init_data = data.get('init_data', '')
+    if not verify_telegram_data(init_data):
+        return jsonify({"status":"error", "message":"签名验证失败"}), 403
     # Rate limiting: 10 likes per minute per user
     if not check_rate_limit(f'like_{user_id}', max_requests=10, window_seconds=60):
         return jsonify({"status":"error", "message":"操作过于频繁，请稍后再试"}), 429
     
-    with get_db() as conn: 
+    with get_db() as conn:
         conn.execute("UPDATE posts SET likes=likes+1 WHERE id=?", (post_id,))
+        # Award +1 credit to post author
+        post_row = conn.execute("SELECT user_id FROM posts WHERE id=?", (post_id,)).fetchone()
+        if post_row and post_row['user_id']:
+            add_credit_event(conn, str(post_row['user_id']), 'post_liked')
     return jsonify({"status":"ok"})
 
 @app.route('/api/comment/<int:post_id>', methods=['POST'])
 def comment(post_id):
-    content = request.json.get('content')
-    user_id = request.json.get('user_id', 'anonymous')
+    data = request.json or {}
+    content = data.get('content')
+    user_id = data.get('user_id', 'anonymous')
+    init_data = data.get('init_data', '')
+    if not verify_telegram_data(init_data):
+        return jsonify({"status":"error", "message":"签名验证失败"}), 403
     
     # Rate limiting: 5 comments per minute per user
     if not check_rate_limit(f'comment_{user_id}', max_requests=5, window_seconds=60):
@@ -573,6 +791,9 @@ def comment(post_id):
             cursor.execute("INSERT INTO comments (post_id, content, date, user_id) VALUES (?,?,?,?)",
                            (post_id, content, date_str, user_id))
             new_id = cursor.lastrowid
+            # Award +1 credit to the commenter
+            if user_id.startswith('tg_'):
+                add_credit_event(conn, user_id[3:], 'comment_posted')
         return jsonify({"status": "ok", "id": new_id, "date": date_str})
     return jsonify({"status":"ok"})
 
@@ -589,7 +810,11 @@ def blacklist_user(post_id):
 
 @app.route('/api/favorite/<int:post_id>', methods=['POST', 'DELETE'])
 def toggle_favorite(post_id):
-    user_id = request.json.get('user_id', 'anonymous')
+    data = request.json or {}
+    user_id = data.get('user_id', 'anonymous')
+    init_data = data.get('init_data', '')
+    if not verify_telegram_data(init_data):
+        return jsonify({"status":"error", "message":"签名验证失败"}), 403
     with get_db() as conn:
         existing = conn.execute("SELECT 1 FROM user_favorites WHERE user_id=? AND post_id=?", (user_id, post_id)).fetchone()
         if request.method == 'POST' and not existing:
@@ -685,6 +910,25 @@ def update_description(post_id):
         conn.execute("UPDATE posts SET custom_description=? WHERE id=?", (description, post_id))
     return jsonify({"status":"ok"})
 
+@app.route('/api/credit/stats')
+def credit_stats():
+    admin_key = request.args.get('admin_key', '')
+    if admin_key != ADMIN_KEY:
+        return jsonify({"status":"error", "message":"权限不足"}), 403
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT AVG(COALESCE(credit_score,100)) as avg_score,"
+            " SUM(CASE WHEN COALESCE(credit_score,100) >= 200 THEN 1 ELSE 0 END) as high_count,"
+            " SUM(CASE WHEN COALESCE(credit_score,100) < 50 THEN 1 ELSE 0 END) as low_count"
+            " FROM users"
+        ).fetchone()
+    return jsonify({
+        "status": "ok",
+        "avg_score": row['avg_score'],
+        "high_count": row['high_count'] or 0,
+        "low_count": row['low_count'] or 0,
+    })
+
 @app.route('/api/admin/post/<int:post_id>', methods=['DELETE'])
 def delete_post(post_id):
     admin_key = request.json.get('admin_key', '')
@@ -740,7 +984,7 @@ def admin_settings_api():
         with get_db() as conn:
             settings = {row['key']: row['value'] for row in conn.execute("SELECT key, value FROM settings").fetchall()}
         return jsonify(settings)
-    allowed_keys = {'site_title', 'notice', 'filter_tags', 'enable_comments', 'enable_submissions', 'submission_notice', 'accent_color'}
+    allowed_keys = {'site_title', 'notice', 'filter_tags', 'enable_comments', 'enable_submissions', 'submission_notice', 'accent_color', 'enable_ai_review', 'ai_reject_threshold'}
     with get_db() as conn:
         for key, value in data.items():
             if key in allowed_keys:
@@ -753,7 +997,11 @@ def admin_approve_post(post_id):
     if admin_key != ADMIN_KEY:
         return jsonify({"status":"error", "message":"权限不足"}), 403
     with get_db() as conn:
+        post_row = conn.execute("SELECT user_id FROM posts WHERE id=?", (post_id,)).fetchone()
         conn.execute("UPDATE posts SET is_approved=1 WHERE id=?", (post_id,))
+        # Award +15 credit to post author
+        if post_row and post_row['user_id']:
+            add_credit_event(conn, str(post_row['user_id']), 'post_approved')
     return jsonify({"status":"ok"})
 
 @app.route('/api/admin/post/<int:post_id>/tags', methods=['POST'])
@@ -772,6 +1020,10 @@ def user_init():
     tg_id = data.get('tg_id')
     if not tg_id:
         return jsonify({"status":"error", "message":"缺少 tg_id"}), 400
+    # initData HMAC verification
+    init_data = data.get('init_data', '')
+    if not verify_telegram_data(init_data):
+        return jsonify({"status":"error", "message":"签名验证失败"}), 403
     username = data.get('username', '')
     first_name = data.get('first_name', '')
     last_name = data.get('last_name', '')
@@ -782,9 +1034,36 @@ def user_init():
             conn.execute("UPDATE users SET username=?, first_name=?, last_name=? WHERE tg_id=?",
                         (username, first_name, last_name, str(tg_id)))
         else:
-            conn.execute("INSERT INTO users (tg_id, username, first_name, last_name, photo_url, registered_at) VALUES (?,?,?,?,?,?)",
-                        (str(tg_id), username, first_name, last_name, photo_url, datetime.now().strftime("%Y-%m-%d")))
+            conn.execute("INSERT INTO users (tg_id, username, first_name, last_name, photo_url, registered_at, credit_score, credit_history) VALUES (?,?,?,?,?,?,?,?)",
+                        (str(tg_id), username, first_name, last_name, photo_url, datetime.now().strftime("%Y-%m-%d"), 100, '[]'))
     return jsonify({"status":"ok", "user_id": f"tg_{tg_id}"})
+
+@app.route('/api/credit')
+def get_credit():
+    user_id = request.args.get('user_id', '')
+    if not user_id.startswith('tg_'):
+        return jsonify({"status":"error", "message":"需要 Telegram 登录"}), 400
+    tg_id = user_id[3:]
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT credit_score, credit_history FROM users WHERE tg_id=?", (tg_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({"status":"error", "message":"用户不存在"}), 404
+    score = row['credit_score'] if row['credit_score'] is not None else 100
+    try:
+        history = json.loads(row['credit_history'] or '[]')
+    except (json.JSONDecodeError, TypeError):
+        history = []
+    tier = get_credit_tier(score)
+    nxt = next_tier_info(score)
+    return jsonify({
+        "status": "ok",
+        "score": score,
+        "tier": tier,
+        "next_tier": nxt,
+        "history": history[-10:],
+    })
 
 @app.route('/my-submissions')
 def my_submissions():
