@@ -323,6 +323,9 @@ def webhook():
                                     conn.execute("INSERT OR IGNORE INTO posts (msg_id, text, title, date, media_group_id, first_media, thumbnail, is_approved) VALUES (?,?,?,?,?,?,?,1)",
                                                  (h.message_id, (h.text or h.caption or ""), "官方", datetime.now().strftime("%Y-%m-%d"), h.media_group_id, path, thumbnail))
                                 count += 1
+                    # 推进 offset，标记所有已获取的 updates 为已读，防止重新注册 Webhook 后重复投递
+                    if updates:
+                        bot.get_updates(offset=updates[-1].update_id + 1, limit=1)
                     bot.send_message(MY_CHAT_ID, f"✅ 同步完成，共同步 {count} 条新内容")
                 except Exception as e:
                     bot.send_message(MY_CHAT_ID, f"❌ 同步失败: {e}")
