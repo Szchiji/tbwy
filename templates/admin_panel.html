@@ -7,34 +7,34 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --orange: #FF6A00;
-            --orange-light: rgba(255,106,0,0.1);
-            --bg: #F5F5F5;
-            --card: #FFFFFF;
-            --text: #1A1A2E;
-            --hint: #888;
-            --border: #EBEBEB;
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
         }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 70px; }
 
         .top-bar {
-            background: #fff; border-bottom: 1px solid var(--border);
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 10px; padding: 12px 14px;
             position: sticky; top: 0; z-index: 50;
         }
-        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--bg); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--card); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); }
         .top-title { font-size: 16px; font-weight: 700; flex: 1; }
         .tg-id-pill { background: var(--orange-light); color: var(--orange); font-size: 11px; padding: 3px 8px; border-radius: 10px; }
 
         .tabs {
-            display: flex; overflow-x: auto; background: #fff;
+            display: flex; overflow-x: auto; background: rgba(8,8,15,0.92);
             border-bottom: 2px solid var(--border);
         }
         .tabs::-webkit-scrollbar { display: none; }
         .tab {
             flex: 0 0 auto; padding: 12px 16px;
-            font-size: 13px; font-weight: 600; color: #888;
+            font-size: 13px; font-weight: 600; color: var(--hint);
             cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
             white-space: nowrap;
         }
@@ -46,18 +46,18 @@
         /* 审核卡片 */
         .review-card {
             background: var(--card); border-radius: 12px; margin-bottom: 10px;
-            overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            overflow: hidden; border: 1px solid var(--border);
         }
         .review-card-header {
             display: flex; gap: 10px; padding: 12px;
         }
         .review-thumb {
             width: 60px; height: 76px; border-radius: 8px;
-            object-fit: cover; background: #eee; flex-shrink: 0;
+            object-fit: cover; background: #17172a; flex-shrink: 0;
         }
         .review-thumb-placeholder {
-            width: 60px; height: 76px; border-radius: 8px; background: #eee;
-            display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 22px; flex-shrink: 0;
+            width: 60px; height: 76px; border-radius: 8px; background: #17172a;
+            display: flex; align-items: center; justify-content: center; color: var(--hint); font-size: 22px; flex-shrink: 0;
         }
         .review-info { flex: 1; }
         .review-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
@@ -78,17 +78,17 @@
         }
         .btn-view {
             flex: 0 0 auto; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
-            background: #fff; color: var(--text); font-size: 14px; cursor: pointer;
+            background: var(--card); color: var(--text); font-size: 14px; cursor: pointer;
         }
 
         /* 设置区 */
-        .settings-section { background: var(--card); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+        .settings-section { background: var(--card); border-radius: 12px; margin-bottom: 10px; overflow: hidden; border: 1px solid var(--border); }
         .settings-title { font-size: 13px; font-weight: 700; color: var(--hint); padding: 10px 14px; border-bottom: 1px solid var(--border); }
         .settings-row { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
         .settings-row:last-child { border-bottom: none; }
         .settings-label { flex: 1; font-size: 14px; }
         .toggle {
-            width: 44px; height: 24px; border-radius: 12px; background: #ddd; position: relative;
+            width: 44px; height: 24px; border-radius: 12px; background: rgba(255,255,255,0.1); position: relative;
             cursor: pointer; transition: background 0.2s;
         }
         .toggle.on { background: var(--orange); }
@@ -117,6 +117,7 @@
         .user-card {
             background: var(--card); border-radius: 10px; margin-bottom: 8px;
             padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+            border: 1px solid var(--border);
         }
         .user-avatar {
             width: 38px; height: 38px; border-radius: 50%; background: var(--orange-light);
@@ -127,16 +128,16 @@
         .user-name { font-size: 14px; font-weight: 600; }
         .user-id { font-size: 11px; color: var(--hint); }
         .role-badge { font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
-        .role-admin { background: #FFE8F0; color: #E63E6D; }
+        .role-admin { background: rgba(230,62,109,0.15); color: #E63E6D; }
         .role-user  { background: var(--orange-light); color: var(--orange); }
-        .role-client{ background: #E8F4FF; color: #1A73E8; }
+        .role-client{ background: rgba(56,189,248,0.12); color: #38bdf8; }
         .role-select {
             font-size: 12px; padding: 4px 8px; border-radius: 8px;
-            border: 1px solid var(--border); background: #fff; cursor: pointer;
+            border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer;
         }
 
         /* 空状态 */
-        .empty { text-align: center; padding: 40px 20px; color: #aaa; font-size: 14px; }
+        .empty { text-align: center; padding: 40px 20px; color: var(--hint); font-size: 14px; }
 
         /* Toast */
         #toast {
@@ -150,14 +151,15 @@
 
         /* 置顶按钮 */
         .pin-btn { padding: 6px 10px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; }
-        .pin-none { background: #f0f0f0; color: #666; }
-        .pin-perm { background: #FFE8F0; color: #E63E6D; }
-        .pin-rot  { background: #F0EAFF; color: #7B2FBE; }
+        .pin-none { background: rgba(255,255,255,0.08); color: var(--hint); }
+        .pin-perm { background: rgba(230,62,109,0.15); color: #E63E6D; }
+        .pin-rot  { background: rgba(167,139,250,0.15); color: #a78bfa; }
 
         /* 黑名单卡片 */
         .blacklist-card {
             background: var(--card); border-radius: 10px; margin-bottom: 8px;
             padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+            border: 1px solid var(--border);
         }
         .bl-info { flex: 1; }
         .bl-name { font-size: 14px; font-weight: 600; }
@@ -331,7 +333,7 @@
                 ${p.is_approved===1 ? `<button style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--orange-light);color:var(--orange);font-size:14px;cursor:pointer;" onclick="toggleVerify(${p.id}, ${p.is_verified})">
                     ${p.is_verified ? '取消认证' : '✓ 设为认证'}
                 </button>` : ''}
-                <button style="padding:10px 14px;border-radius:10px;border:none;background:#FFE8F0;color:#E63E6D;font-size:13px;cursor:pointer;" onclick="showDeleteMenu(${p.id}, '${p.tg_id||''}')">删除▾</button>
+                <button style="padding:10px 14px;border-radius:10px;border:none;background:rgba(230,62,109,0.15);color:#E63E6D;font-size:13px;cursor:pointer;" onclick="showDeleteMenu(${p.id}, '${p.tg_id||''}')">删除▾</button>
             </div>
         </div>`;
         return `<div class="review-card" id="card-${p.id}">
@@ -566,7 +568,7 @@
                         <div class="bl-name">TG ID: ${u.tg_id}</div>
                         <div class="bl-meta">拉黑时间：${u.date||'未知'}</div>
                     </div>
-                    <button style="padding:8px 12px;border-radius:8px;border:none;background:#FFE8F0;color:#E63E6D;font-size:12px;cursor:pointer;" onclick="unblacklist('${u.tg_id}')">解除</button>
+                    <button style="padding:8px 12px;border-radius:8px;border:none;background:rgba(230,62,109,0.15);color:#E63E6D;font-size:12px;cursor:pointer;" onclick="unblacklist('${u.tg_id}')">解除</button>
                 </div>`).join('');
             }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
     }

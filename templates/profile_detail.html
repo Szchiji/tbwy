@@ -7,13 +7,13 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --orange: #FF6A00;
-            --orange-light: rgba(255,106,0,0.1);
-            --bg: #F5F5F5;
-            --card: #FFFFFF;
-            --text: #1A1A2E;
-            --hint: #888;
-            --border: #EBEBEB;
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
         }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 80px; }
@@ -21,22 +21,23 @@
         /* 头部 */
         .top-bar {
             position: sticky; top: 0; z-index: 50;
-            background: rgba(255,255,255,0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(8,8,15,0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             display: flex; align-items: center; gap: 10px;
             padding: 10px 14px;
             border-bottom: 1px solid var(--border);
         }
         .back-btn {
             width: 34px; height: 34px; border-radius: 50%;
-            background: var(--bg); border: none;
+            background: var(--card); border: none; color: var(--text);
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; flex-shrink: 0;
         }
         .top-title { font-size: 16px; font-weight: 700; }
 
         /* 照片轮播 */
-        .swiper { overflow: hidden; position: relative; background: #222; }
+        .swiper { overflow: hidden; position: relative; background: #0d1120; }
         .swiper-track { display: flex; transition: transform 0.3s cubic-bezier(.4,0,.2,1); }
         .swiper-slide { flex: 0 0 100%; }
         .swiper-slide img {
@@ -49,9 +50,9 @@
         }
         .swiper-dot {
             width: 6px; height: 6px; border-radius: 3px;
-            background: rgba(255,255,255,0.5); transition: all 0.2s;
+            background: rgba(255,255,255,0.3); transition: all 0.2s;
         }
-        .swiper-dot.active { width: 18px; background: #fff; }
+        .swiper-dot.active { width: 18px; background: var(--orange); }
         .photo-count {
             position: absolute; top: 10px; right: 10px;
             background: rgba(0,0,0,0.55); color: #fff;
@@ -61,12 +62,13 @@
         /* 信息区 */
         .info-block {
             background: var(--card); margin: 0 0 8px; padding: 16px;
+            border-bottom: 1px solid var(--border);
         }
 
         .name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
         .name { font-size: 22px; font-weight: 800; }
         .verified-badge {
-            background: #E8F9EE; color: #27AE60;
+            background: rgba(39,174,96,0.15); color: #27AE60;
             font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
         }
         .num-badge {
@@ -74,7 +76,7 @@
             font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
         }
         .cat-badge {
-            background: #F0EAFF; color: #7B2FBE;
+            background: rgba(167,139,250,0.15); color: #a78bfa;
             font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
         }
         .price-big {
@@ -98,39 +100,40 @@
         }
 
         /* 标签区 */
-        .tags-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; }
+        .tags-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
         .tags-title { font-size: 13px; color: var(--hint); margin-bottom: 10px; font-weight: 600; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
         .tag-pill {
             font-size: 13px; font-weight: 500;
             padding: 4px 12px; border-radius: 16px;
         }
-        .tag-pink   { background: #FFE8F0; color: #E63E6D; }
-        .tag-purple { background: #F0EAFF; color: #7B2FBE; }
-        .tag-green  { background: #E8F9EE; color: #27AE60; }
-        .tag-blue   { background: #E8F4FF; color: #1A73E8; }
-        .tag-orange { background: #FFF0E6; color: var(--orange); }
-        .tag-gray   { background: #F0F0F0; color: #666; }
+        .tag-pink   { background: rgba(230,62,109,0.15); color: #E63E6D; }
+        .tag-purple { background: rgba(167,139,250,0.15); color: #a78bfa; }
+        .tag-green  { background: rgba(39,174,96,0.15);  color: #27AE60; }
+        .tag-blue   { background: rgba(56,189,248,0.12); color: #38bdf8; }
+        .tag-orange { background: rgba(167,139,250,0.12); color: var(--orange); }
+        .tag-gray   { background: rgba(255,255,255,0.08); color: var(--hint); }
 
         /* 简介区 */
-        .desc-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; }
+        .desc-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
         .desc-title { font-size: 13px; color: var(--hint); margin-bottom: 8px; font-weight: 600; }
         .desc-text { font-size: 14px; color: var(--text); line-height: 1.7; white-space: pre-wrap; }
 
         /* 底部操作栏 */
         .action-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
-            background: #fff; border-top: 1px solid var(--border);
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border-top: 1px solid var(--border);
             display: flex; gap: 10px; padding: 10px 16px;
             padding-bottom: max(10px, env(safe-area-inset-bottom));
         }
         .btn-fav {
             flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
-            border: 1.5px solid var(--border); background: #fff;
+            border: 1.5px solid var(--border); background: var(--card);
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; transition: all 0.15s;
         }
-        .btn-fav.active { border-color: #E63E6D; background: #FFE8F0; }
+        .btn-fav.active { border-color: #E63E6D; background: rgba(230,62,109,0.15); }
         .btn-contact {
             flex: 1; height: 46px; border-radius: 14px;
             background: var(--orange); color: #fff;

@@ -7,26 +7,26 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --orange: #FF6A00;
-            --orange-light: rgba(255,106,0,0.1);
-            --bg: #F5F5F5;
-            --card: #FFFFFF;
-            --text: #1A1A2E;
-            --hint: #888;
-            --border: #EBEBEB;
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
         }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 100px; }
 
         .top-bar {
-            background: #fff; border-bottom: 1px solid var(--border);
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 10px; padding: 12px 14px;
             position: sticky; top: 0; z-index: 50;
         }
-        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--bg); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--card); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); }
         .top-title { font-size: 16px; font-weight: 700; }
 
-        .form-section { background: var(--card); border-radius: 12px; margin: 10px; overflow: hidden; }
+        .form-section { background: var(--card); border-radius: 12px; margin: 10px; overflow: hidden; border: 1px solid var(--border); }
         .form-section-title { font-size: 12px; color: var(--hint); font-weight: 700; padding: 10px 14px 6px; border-bottom: 1px solid var(--border); }
         .form-row { padding: 12px 14px; border-bottom: 1px solid var(--border); }
         .form-row:last-child { border-bottom: none; }
@@ -44,7 +44,7 @@
         .cat-options { display: flex; flex-wrap: wrap; gap: 8px; }
         .cat-option {
             padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600;
-            border: 1.5px solid var(--border); color: #666; cursor: pointer;
+            border: 1.5px solid var(--border); color: var(--hint); cursor: pointer;
             transition: all 0.15s;
         }
         .cat-option.selected { background: var(--orange); color: #fff; border-color: var(--orange); }
@@ -69,8 +69,8 @@
         /* 步骤指引 */
         .step-guide {
             display: flex; align-items: center; padding: 14px 12px;
-            background: linear-gradient(135deg, #FFF3E0, #FFF8F0);
-            border-bottom: 1px solid rgba(255,106,0,0.15); gap: 0;
+            background: rgba(167,139,250,0.08);
+            border-bottom: 1px solid var(--border); gap: 0;
         }
         .step-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
         .step-num {
@@ -80,16 +80,16 @@
             display: flex; align-items: center; justify-content: center;
         }
         .step-num.done { background: #4CAF50; }
-        .step-num.active { box-shadow: 0 0 0 4px rgba(255,106,0,0.2); }
+        .step-num.active { box-shadow: 0 0 0 4px rgba(167,139,250,0.25); }
         .step-label { font-size: 11px; font-weight: 600; color: var(--text); text-align: center; }
         .step-arrow { font-size: 14px; color: var(--hint); margin: 0 2px; margin-bottom: 10px; }
 
         /* 提示横幅 */
         .tip-banner {
-            background: linear-gradient(135deg, #FFF3E0, #FFEBE0);
+            background: rgba(167,139,250,0.08);
             border-left: 3px solid var(--orange);
             padding: 10px 14px; margin: 10px; border-radius: 10px;
-            font-size: 13px; color: #7A3000; line-height: 1.6;
+            font-size: 13px; color: var(--text); line-height: 1.6;
         }
         .tip-banner strong { display: block; margin-bottom: 4px; font-size: 14px; }
         .photo-cell {
@@ -123,7 +123,7 @@
             cursor: pointer; letter-spacing: 0.5px; transition: opacity 0.15s;
         }
         .submit-btn:active { opacity: 0.85; }
-        .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .submit-btn:disabled { background: rgba(255,255,255,0.15); cursor: not-allowed; }
 
         /* Toast */
         #toast {
@@ -135,7 +135,7 @@
 
         /* 成功页面 */
         #success-screen {
-            display: none; position: fixed; inset: 0; background: #fff;
+            display: none; position: fixed; inset: 0; background: var(--bg);
             flex-direction: column; align-items: center; justify-content: center;
             z-index: 999;
         }
@@ -182,12 +182,12 @@
     </div>
     <div class="step-arrow">›</div>
     <div class="step-item">
-        <div class="step-num" style="background:#ddd;color:#999;">2</div>
+        <div class="step-num" style="background:rgba(255,255,255,0.1);color:var(--hint);">2</div>
         <div class="step-label">上传照片</div>
     </div>
     <div class="step-arrow">›</div>
     <div class="step-item">
-        <div class="step-num" style="background:#ddd;color:#999;">3</div>
+        <div class="step-num" style="background:rgba(255,255,255,0.1);color:var(--hint);">3</div>
         <div class="step-label">提交审核</div>
     </div>
 </div>

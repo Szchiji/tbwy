@@ -7,47 +7,47 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
-            --orange: #FF6A00;
-            --orange-light: rgba(255,106,0,0.1);
-            --bg: #F5F5F5;
-            --card: #FFFFFF;
-            --text: #1A1A2E;
-            --hint: #888;
-            --border: #EBEBEB;
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
         }
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 70px; }
 
         .top-bar {
-            background: #fff; border-bottom: 1px solid var(--border);
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
             display: flex; align-items: center; gap: 10px; padding: 12px 14px;
             position: sticky; top: 0; z-index: 50;
         }
-        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--bg); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--card); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); }
         .top-title { font-size: 16px; font-weight: 700; flex: 1; }
 
         .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px; }
-        .profile-card { background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.07); cursor: pointer; }
+        .profile-card { background: var(--card); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; }
         .profile-card:active { transform: scale(0.97); }
-        .card-img-wrap { position: relative; width: 100%; padding-top: 130%; background: #EEE; overflow: hidden; }
+        .card-img-wrap { position: relative; width: 100%; padding-top: 130%; background: #17172a; overflow: hidden; }
         .card-img-wrap img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-        .card-img-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg,#f0f0f0,#e0e0e0); color: #ccc; font-size: 40px; }
+        .card-img-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg,#1a1a2e,#0d1120); color: var(--hint); font-size: 40px; }
         .price-badge { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.6); color: #FFD700; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; }
         .hot-badge { position: absolute; top: 0; left: 0; background: var(--orange); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px 2px 4px; border-bottom-right-radius: 8px; }
         .card-info { padding: 8px; }
         .card-name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 4px; }
         .badge-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
         .num-badge { background: var(--orange-light); color: var(--orange); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
-        .verified-badge { background: #E8F9EE; color: #27AE60; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+        .verified-badge { background: rgba(39,174,96,0.15); color: #27AE60; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
         .tag-list { display: flex; flex-wrap: wrap; gap: 3px; }
-        .tag-pill { font-size: 10px; font-weight: 500; padding: 1px 7px; border-radius: 10px; background: #FFE8F0; color: #E63E6D; }
+        .tag-pill { font-size: 10px; font-weight: 500; padding: 1px 7px; border-radius: 10px; background: rgba(230,62,109,0.15); color: #E63E6D; }
 
-        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--border); display: flex; height: 56px; z-index: 50; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: #aaa; text-decoration: none; cursor: pointer; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(8,8,15,0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border-top: 1px solid var(--border); display: flex; height: 56px; z-index: 50; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--hint); text-decoration: none; cursor: pointer; }
         .nav-tab.active { color: var(--orange); }
         .nav-tab svg { width: 22px; height: 22px; }
 
-        .empty-state { text-align: center; padding: 60px 20px; color: #aaa; }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--hint); }
         .empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
     </style>
     <script>
