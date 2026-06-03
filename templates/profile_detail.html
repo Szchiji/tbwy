@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>星搭 StarMatch - 资料详情</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
+        }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 80px; }
+
+        /* 头部 */
+        .top-bar {
+            position: sticky; top: 0; z-index: 50;
+            background: rgba(8,8,15,0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .back-btn {
+            width: 34px; height: 34px; border-radius: 50%;
+            background: var(--card); border: none; color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; flex-shrink: 0;
+        }
+        .top-title { font-size: 16px; font-weight: 700; }
+
+        /* 照片轮播 */
+        .swiper { overflow: hidden; position: relative; background: #0d1120; }
+        .swiper-track { display: flex; transition: transform 0.3s cubic-bezier(.4,0,.2,1); }
+        .swiper-slide { flex: 0 0 100%; }
+        .swiper-slide img {
+            width: 100%; max-height: 70vw; min-height: 220px;
+            object-fit: cover; display: block;
+        }
+        .swiper-dots {
+            position: absolute; bottom: 10px; left: 0; right: 0;
+            display: flex; justify-content: center; gap: 5px; z-index: 2;
+        }
+        .swiper-dot {
+            width: 6px; height: 6px; border-radius: 3px;
+            background: rgba(255,255,255,0.3); transition: all 0.2s;
+        }
+        .swiper-dot.active { width: 18px; background: var(--orange); }
+        .photo-count {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(0,0,0,0.55); color: #fff;
+            font-size: 11px; padding: 2px 8px; border-radius: 12px;
+        }
+
+        /* 信息区 */
+        .info-block {
+            background: var(--card); margin: 0 0 8px; padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .name { font-size: 22px; font-weight: 800; }
+        .verified-badge {
+            background: rgba(39,174,96,0.15); color: #27AE60;
+            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+        }
+        .num-badge {
+            background: var(--orange-light); color: var(--orange);
+            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+        }
+        .cat-badge {
+            background: rgba(167,139,250,0.15); color: #a78bfa;
+            font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+        }
+        .price-big {
+            font-size: 24px; font-weight: 900; color: var(--orange);
+            margin-bottom: 12px;
+        }
+        .price-big span { font-size: 14px; font-weight: 500; color: var(--hint); margin-left: 2px; }
+
+        .detail-row {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 0; border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: var(--hint); width: 56px; flex-shrink: 0; }
+        .detail-val { color: var(--text); flex: 1; }
+        .copy-btn {
+            background: var(--orange-light); color: var(--orange);
+            border: none; border-radius: 8px;
+            font-size: 12px; padding: 3px 10px; cursor: pointer;
+        }
+
+        /* 标签区 */
+        .tags-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+        .tags-title { font-size: 13px; color: var(--hint); margin-bottom: 10px; font-weight: 600; }
+        .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tag-pill {
+            font-size: 13px; font-weight: 500;
+            padding: 4px 12px; border-radius: 16px;
+        }
+        .tag-pink   { background: rgba(230,62,109,0.15); color: #E63E6D; }
+        .tag-purple { background: rgba(167,139,250,0.15); color: #a78bfa; }
+        .tag-green  { background: rgba(39,174,96,0.15);  color: #27AE60; }
+        .tag-blue   { background: rgba(56,189,248,0.12); color: #38bdf8; }
+        .tag-orange { background: rgba(167,139,250,0.12); color: var(--orange); }
+        .tag-gray   { background: rgba(255,255,255,0.08); color: var(--hint); }
+
+        /* 简介区 */
+        .desc-block { background: var(--card); margin: 0 0 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+        .desc-title { font-size: 13px; color: var(--hint); margin-bottom: 8px; font-weight: 600; }
+        .desc-text { font-size: 14px; color: var(--text); line-height: 1.7; white-space: pre-wrap; }
+
+        /* 底部操作栏 */
+        .action-bar {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border-top: 1px solid var(--border);
+            display: flex; gap: 10px; padding: 10px 16px;
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+        }
+        .btn-fav {
+            flex: 0 0 auto; width: 46px; height: 46px; border-radius: 50%;
+            border: 1.5px solid var(--border); background: var(--card);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .btn-fav.active { border-color: #E63E6D; background: rgba(230,62,109,0.15); }
+        .btn-contact {
+            flex: 1; height: 46px; border-radius: 14px;
+            background: var(--orange); color: #fff;
+            border: none; font-size: 15px; font-weight: 700;
+            cursor: pointer; letter-spacing: 0.5px;
+            transition: opacity 0.15s;
+        }
+        .btn-contact:active { opacity: 0.85; }
+
+        .no-photo { width: 100%; height: 240px; background: linear-gradient(135deg,#f0f0f0,#e0e0e0); display:flex;align-items:center;justify-content:center;color:#ccc;font-size:48px; }
+    </style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="top-bar">
+    <button class="back-btn" onclick="history.back()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
+    </button>
+    <span class="top-title">详情</span>
+</div>
+
+<!-- 照片轮播 -->
+{% if profile.photos and profile.photos|length > 0 %}
+<div class="swiper" id="swiper">
+    <div class="swiper-track" id="swiper-track">
+        {% for photo in profile.photos %}
+        <div class="swiper-slide"><img src="{{ photo }}" alt=""></div>
+        {% endfor %}
+    </div>
+    {% if profile.photos|length > 1 %}
+    <div class="swiper-dots" id="swiper-dots">
+        {% for photo in profile.photos %}
+        <div class="swiper-dot {% if loop.first %}active{% endif %}"></div>
+        {% endfor %}
+    </div>
+    <span class="photo-count">1 / {{ profile.photos|length }}</span>
+    {% endif %}
+</div>
+{% else %}
+<div class="no-photo">📷</div>
+{% endif %}
+
+<!-- 基础信息 -->
+<div class="info-block">
+    <div class="name-row">
+        <span class="name">{{ profile.name }}</span>
+        {% if profile.is_verified %}<span class="verified-badge">✓ 已认证</span>{% endif %}
+        {% if profile.category %}<span class="cat-badge">{{ profile.category }}</span>{% endif %}
+        {% if profile.number %}<span class="num-badge">{{ profile.number }}</span>{% endif %}
+    </div>
+    {% if profile.price %}
+    <div class="price-big">{{ profile.price }}<span>元/次</span></div>
+    {% endif %}
+
+    {% if profile.region %}
+    <div class="detail-row">
+        <span class="detail-label">地区</span>
+        <span class="detail-val">{{ profile.region }}{% if profile.district %} · {{ profile.district }}{% endif %}</span>
+    </div>
+    {% endif %}
+
+    {% if profile.contact %}
+    <div class="detail-row">
+        <span class="detail-label">联系方式</span>
+        <span class="detail-val" id="contact-val">{{ profile.contact }}</span>
+        <button class="copy-btn" onclick="copyContact()">复制</button>
+    </div>
+    {% endif %}
+
+    {% if profile.category %}
+    <div class="detail-row">
+        <span class="detail-label">分类</span>
+        <span class="detail-val">{{ profile.category }}</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 标签 -->
+{% if profile.tags %}
+<div class="tags-block">
+    <div class="tags-title">特点标签</div>
+    <div class="tag-list" id="tags-list">
+        {% set tag_color_map = {'可外':'tag-pink','可夜':'tag-purple','纯小白':'tag-green','学生':'tag-blue'} %}
+        {% for tag in profile.tags %}
+        <span class="tag-pill tag-pink">{{ tag }}</span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- 简介 -->
+{% if profile.description %}
+<div class="desc-block">
+    <div class="desc-title">简介</div>
+    <div class="desc-text">{{ profile.description }}</div>
+</div>
+{% endif %}
+
+<!-- 操作栏 -->
+<div class="action-bar">
+    <button class="btn-fav {% if is_fav %}active{% endif %}" id="fav-btn" onclick="toggleFav()">
+        <svg id="fav-icon" width="22" height="22" viewBox="0 0 24 24" 
+             fill="{% if is_fav %}#E63E6D{% else %}none{% endif %}"
+             stroke="{% if is_fav %}#E63E6D{% else %}#888{% endif %}" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+        </svg>
+    </button>
+    {% if profile.contact %}
+    <button class="btn-contact" onclick="contactProfile()">💬 联系 {{ profile.name }}</button>
+    {% else %}
+    <button class="btn-contact" style="background:#ccc;cursor:default;">暂无联系方式</button>
+    {% endif %}
+</div>
+
+<script>
+    // Telegram WebApp
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const TG_ID = (function(){
+        try {
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) return String(tg.initDataUnsafe.user.id);
+        } catch(e){}
+        const m = location.search.match(/tg_id=(\d+)/);
+        return m ? m[1] : localStorage.getItem('tg_id') || '';
+    })();
+
+    // 照片轮播
+    (function(){
+        const track = document.getElementById('swiper-track');
+        if (!track) return;
+        const slides = track.querySelectorAll('.swiper-slide');
+        if (slides.length <= 1) return;
+        const dots = document.querySelectorAll('.swiper-dot');
+        const countEl = document.querySelector('.photo-count');
+        let cur = 0;
+        let startX = 0;
+
+        function go(n) {
+            cur = Math.max(0, Math.min(slides.length-1, n));
+            track.style.transform = `translateX(-${cur*100}%)`;
+            dots.forEach((d,i) => d.classList.toggle('active', i===cur));
+            if (countEl) countEl.textContent = `${cur+1} / ${slides.length}`;
+        }
+
+        document.getElementById('swiper').addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+        document.getElementById('swiper').addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 40) go(cur + (dx < 0 ? 1 : -1));
+        });
+    })();
+
+    // 收藏
+    let isFav = {{ 'true' if is_fav else 'false' }};
+    function toggleFav() {
+        if (!TG_ID) { alert('请先登录'); return; }
+        const profileId = {{ profile.id }};
+        fetch(`/api/profile_favorite/${profileId}`, {
+            method: isFav ? 'DELETE' : 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({tg_id: TG_ID})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') {
+                isFav = !isFav;
+                const btn = document.getElementById('fav-btn');
+                const icon = document.getElementById('fav-icon');
+                btn.classList.toggle('active', isFav);
+                icon.setAttribute('fill', isFav ? '#E63E6D' : 'none');
+                icon.setAttribute('stroke', isFav ? '#E63E6D' : '#888');
+                if(tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(isFav?'success':'warning');
+            }
+        });
+    }
+
+    // 复制联系方式
+    function copyContact() {
+        const val = document.getElementById('contact-val');
+        if (!val) return;
+        navigator.clipboard.writeText(val.textContent.trim()).then(()=>{
+            if(tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            alert('已复制联系方式');
+        }).catch(()=>alert(val.textContent.trim()));
+    }
+
+    // 联系
+    function contactProfile() {
+        const contact = `{{ profile.contact or '' }}`.trim();
+        if (!contact) return;
+        if (contact.startsWith('@') || contact.startsWith('https://t.me/')) {
+            const handle = contact.startsWith('@') ? contact.slice(1) : contact.split('/').pop();
+            if (tg && tg.openTelegramLink) tg.openTelegramLink(`https://t.me/${handle}`);
+            else window.open(`https://t.me/${handle}`, '_blank');
+        } else {
+            copyContact();
+        }
+    }
+</script>
+</body>
+</html>

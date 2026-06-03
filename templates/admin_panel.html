@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>星搭 StarMatch - 管理后台</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --orange: #a78bfa;
+            --orange-light: rgba(167,139,250,0.12);
+            --bg: #08080f;
+            --card: #101018;
+            --text: #e5e7eb;
+            --hint: #6b7280;
+            --border: rgba(167,139,250,0.12);
+        }
+        * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif; margin: 0; padding-bottom: 70px; }
+
+        .top-bar {
+            background: rgba(8,8,15,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+            position: sticky; top: 0; z-index: 50;
+        }
+        .back-btn { width: 34px; height: 34px; border-radius: 50%; background: var(--card); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); }
+        .top-title { font-size: 16px; font-weight: 700; flex: 1; }
+        .tg-id-pill { background: var(--orange-light); color: var(--orange); font-size: 11px; padding: 3px 8px; border-radius: 10px; }
+
+        .tabs {
+            display: flex; overflow-x: auto; background: rgba(8,8,15,0.92);
+            border-bottom: 2px solid var(--border);
+        }
+        .tabs::-webkit-scrollbar { display: none; }
+        .tab {
+            flex: 0 0 auto; padding: 12px 16px;
+            font-size: 13px; font-weight: 600; color: var(--hint);
+            cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+            white-space: nowrap;
+        }
+        .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
+
+        .tab-content { display: none; padding: 12px; }
+        .tab-content.active { display: block; }
+
+        /* 审核卡片 */
+        .review-card {
+            background: var(--card); border-radius: 12px; margin-bottom: 10px;
+            overflow: hidden; border: 1px solid var(--border);
+        }
+        .review-card-header {
+            display: flex; gap: 10px; padding: 12px;
+        }
+        .review-thumb {
+            width: 60px; height: 76px; border-radius: 8px;
+            object-fit: cover; background: #17172a; flex-shrink: 0;
+        }
+        .review-thumb-placeholder {
+            width: 60px; height: 76px; border-radius: 8px; background: #17172a;
+            display: flex; align-items: center; justify-content: center; color: var(--hint); font-size: 22px; flex-shrink: 0;
+        }
+        .review-info { flex: 1; }
+        .review-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+        .review-meta { font-size: 12px; color: var(--hint); display: flex; flex-wrap: wrap; gap: 6px; }
+        .review-meta span { display: flex; align-items: center; gap: 2px; }
+        .review-actions {
+            display: flex; gap: 8px; padding: 0 12px 12px;
+        }
+        .btn-approve {
+            flex: 1; padding: 10px; border-radius: 10px; border: none;
+            background: #27AE60; color: #fff; font-size: 14px; font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-reject {
+            flex: 1; padding: 10px; border-radius: 10px; border: none;
+            background: #E74C3C; color: #fff; font-size: 14px; font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-view {
+            flex: 0 0 auto; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--card); color: var(--text); font-size: 14px; cursor: pointer;
+        }
+
+        /* 设置区 */
+        .settings-section { background: var(--card); border-radius: 12px; margin-bottom: 10px; overflow: hidden; border: 1px solid var(--border); }
+        .settings-title { font-size: 13px; font-weight: 700; color: var(--hint); padding: 10px 14px; border-bottom: 1px solid var(--border); }
+        .settings-row { display: flex; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+        .settings-row:last-child { border-bottom: none; }
+        .settings-label { flex: 1; font-size: 14px; }
+        .toggle {
+            width: 44px; height: 24px; border-radius: 12px; background: rgba(255,255,255,0.1); position: relative;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .toggle.on { background: var(--orange); }
+        .toggle-dot {
+            width: 20px; height: 20px; border-radius: 50%; background: #fff;
+            position: absolute; top: 2px; left: 2px; transition: left 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .toggle.on .toggle-dot { left: 22px; }
+
+        /* 文本输入 */
+        .inp {
+            width: 100%; padding: 10px 12px; border-radius: 10px;
+            border: 1.5px solid var(--border); font-size: 14px; color: var(--text);
+            background: var(--bg); outline: none; transition: border-color 0.2s;
+        }
+        .inp:focus { border-color: var(--orange); }
+        .save-btn {
+            width: 100%; padding: 12px; border-radius: 12px; border: none;
+            background: var(--orange); color: #fff; font-size: 15px; font-weight: 700;
+            cursor: pointer; margin-top: 8px;
+        }
+        .save-btn:active { opacity: 0.85; }
+
+        /* 用户列表 */
+        .user-card {
+            background: var(--card); border-radius: 10px; margin-bottom: 8px;
+            padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+            border: 1px solid var(--border);
+        }
+        .user-avatar {
+            width: 38px; height: 38px; border-radius: 50%; background: var(--orange-light);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: 700; color: var(--orange); flex-shrink: 0;
+        }
+        .user-info { flex: 1; }
+        .user-name { font-size: 14px; font-weight: 600; }
+        .user-id { font-size: 11px; color: var(--hint); }
+        .role-badge { font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
+        .role-admin { background: rgba(230,62,109,0.15); color: #E63E6D; }
+        .role-user  { background: var(--orange-light); color: var(--orange); }
+        .role-client{ background: rgba(56,189,248,0.12); color: #38bdf8; }
+        .role-select {
+            font-size: 12px; padding: 4px 8px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer;
+        }
+
+        /* 空状态 */
+        .empty { text-align: center; padding: 40px 20px; color: var(--hint); font-size: 14px; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: rgba(0,0,0,0.8); color: #fff; padding: 10px 20px; border-radius: 20px;
+            font-size: 13px; z-index: 999; opacity: 0; transition: all 0.3s; pointer-events: none;
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        .section-label { font-size: 12px; color: var(--hint); margin: 12px 0 6px; font-weight: 600; }
+
+        /* 置顶按钮 */
+        .pin-btn { padding: 6px 10px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .pin-none { background: rgba(255,255,255,0.08); color: var(--hint); }
+        .pin-perm { background: rgba(230,62,109,0.15); color: #E63E6D; }
+        .pin-rot  { background: rgba(167,139,250,0.15); color: #a78bfa; }
+
+        /* 黑名单卡片 */
+        .blacklist-card {
+            background: var(--card); border-radius: 10px; margin-bottom: 8px;
+            padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+            border: 1px solid var(--border);
+        }
+        .bl-info { flex: 1; }
+        .bl-name { font-size: 14px; font-weight: 600; }
+        .bl-meta { font-size: 11px; color: var(--hint); }
+    </style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- 顶部 -->
+<div class="top-bar">
+    <button class="back-btn" onclick="history.back()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
+    </button>
+    <span class="top-title">管理员后台</span>
+    <span class="tg-id-pill" id="admin-tid"></span>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('pending')">待审核 <span id="badge-pending" style="background:var(--orange);color:#fff;font-size:10px;padding:1px 5px;border-radius:8px;margin-left:4px;"></span></div>
+    <div class="tab" onclick="switchTab('approved')">已通过</div>
+    <div class="tab" onclick="switchTab('rejected')">已驳回</div>
+    <div class="tab" onclick="switchTab('users')">用户管理</div>
+    <div class="tab" onclick="switchTab('blacklist')">黑名单</div>
+    <div class="tab" onclick="switchTab('settings')">设置</div>
+</div>
+
+<!-- 待审核 -->
+<div id="tab-pending" class="tab-content active">
+    <div id="pending-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 已通过 -->
+<div id="tab-approved" class="tab-content">
+    <div id="approved-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 已驳回 -->
+<div id="tab-rejected" class="tab-content">
+    <div id="rejected-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 用户管理 -->
+<div id="tab-users" class="tab-content">
+    <div id="users-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 黑名单 -->
+<div id="tab-blacklist" class="tab-content">
+    <div style="padding:12px 12px 6px;">
+        <div style="display:flex;gap:8px;">
+            <input class="inp" id="bl-tg-input" type="number" placeholder="输入 Telegram ID 拉黑" style="flex:1;">
+            <button class="save-btn" style="flex:0 0 auto;margin:0;padding:10px 14px;font-size:13px;" onclick="blacklistManual()">拉黑</button>
+        </div>
+    </div>
+    <div id="blacklist-list"><div class="empty">加载中...</div></div>
+</div>
+
+<!-- 设置 -->
+<div id="tab-settings" class="tab-content">
+    <!-- 小程序名称 -->
+    <div class="settings-section">
+        <div class="settings-title">🌟 小程序品牌</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">小程序名称</div>
+            <input class="inp" id="app-name-input" placeholder="如：星搭 StarMatch">
+            <div class="section-label" style="margin-top:10px;">价格单位</div>
+            <input class="inp" id="price-unit-input" placeholder="如：P 或 元">
+            <div class="section-label" style="margin-top:10px;">管理员联系（Telegram 用户名，不含@）</div>
+            <input class="inp" id="admin-contact-input" placeholder="如：yourname">
+            <button class="save-btn" style="margin-top:8px;" onclick="saveBranding()">保存品牌设置</button>
+        </div>
+    </div>
+
+    <!-- 表单字段开关 -->
+    <div class="settings-section" id="field-settings">
+        <div class="settings-title">📋 上传表单字段配置</div>
+        <div id="field-toggles"></div>
+    </div>
+
+    <!-- 导航标签 -->
+    <div class="settings-section">
+        <div class="settings-title">🏷️ 分类导航标签</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">导航标签（用逗号分隔）</div>
+            <input class="inp" id="nav-tabs-input" placeholder="如：全部,中圈,大圈,个人">
+            <button class="save-btn" onclick="saveNavTabs()">保存导航标签</button>
+        </div>
+    </div>
+
+    <!-- 公告 -->
+    <div class="settings-section">
+        <div class="settings-title">📢 公告管理</div>
+        <div style="padding:12px 14px;">
+            <div class="section-label">公告内容（滚动显示在首页）</div>
+            <textarea class="inp" id="notice-input" rows="3" placeholder="输入公告内容..."></textarea>
+            <button class="save-btn" onclick="saveNotice()">发布公告</button>
+        </div>
+    </div>
+
+    <!-- 认证说明 -->
+    <div class="settings-section">
+        <div class="settings-title">✅ 认证说明</div>
+        <div style="padding:12px 14px;">
+            <textarea class="inp" id="verify-desc-input" rows="2" placeholder="认证说明文字..."></textarea>
+            <button class="save-btn" onclick="saveVerifyDesc()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); }
+
+    const TG_ID = (function(){
+        try {
+            if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) return String(tg.initDataUnsafe.user.id);
+        } catch(e){}
+        const m = location.search.match(/tg_id=(\d+)/);
+        return m ? m[1] : localStorage.getItem('tg_id') || '';
+    })();
+    const ADMIN_KEY = '{{ admin_key }}';
+
+    document.getElementById('admin-tid').textContent = 'TG: ' + TG_ID;
+
+    function toast(msg, dur=2000) {
+        const el = document.getElementById('toast');
+        el.textContent = msg; el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), dur);
+    }
+
+    function switchTab(name) {
+        document.querySelectorAll('.tab').forEach((t,i) => {
+            const names=['pending','approved','rejected','users','blacklist','settings'];
+            t.classList.toggle('active', names[i]===name);
+        });
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-'+name).classList.add('active');
+        if (name==='pending') loadProfiles(0, 'pending-list');
+        else if (name==='approved') loadProfiles(1, 'approved-list');
+        else if (name==='rejected') loadProfiles(2, 'rejected-list');
+        else if (name==='users') loadUsers();
+        else if (name==='blacklist') loadBlacklist();
+        else if (name==='settings') loadSettings();
+    }
+
+    function approvalStatusLabel(s) {
+        return ['⏳ 待审核','✅ 已通过','❌ 已驳回'][s] || '';
+    }
+
+    function buildReviewCard(p, showActions) {
+        const photo = p.photos && p.photos.length ? `<img class="review-thumb" src="${p.photos[0]}" onerror="this.style.display='none'">` : '<div class="review-thumb-placeholder">📷</div>';
+        const pinLabels = ['不置顶','📌 长久置顶','🔄 流动置顶'];
+        const pinColors = ['pin-none','pin-perm','pin-rot'];
+        const pinActions = p.is_approved===1 ? `<div style="padding:0 12px 6px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--hint);">置顶：</span>
+            ${[0,1,2].map(t=>`<button class="pin-btn ${pinColors[t]} ${(p.pin_type||0)===t?'ring':''}" style="${(p.pin_type||0)===t?'outline:2px solid currentColor;outline-offset:1px;':''}" onclick="setPin(${p.id},${t})">${pinLabels[t]}</button>`).join('')}
+        </div>` : '';
+        const actions = showActions ? `<div class="review-actions">
+            <button class="btn-approve" onclick="approve(${p.id})">✓ 通过</button>
+            <button class="btn-reject" onclick="reject(${p.id})">✗ 驳回</button>
+            <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
+        </div>` : `<div style="padding:0 12px 12px;">
+            ${pinActions}
+            <div style="display:flex;gap:8px;margin-top:4px;">
+                <button class="btn-view" onclick="viewProfile(${p.id})">查看</button>
+                ${p.is_approved===1 ? `<button style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--orange-light);color:var(--orange);font-size:14px;cursor:pointer;" onclick="toggleVerify(${p.id}, ${p.is_verified})">
+                    ${p.is_verified ? '取消认证' : '✓ 设为认证'}
+                </button>` : ''}
+                <button style="padding:10px 14px;border-radius:10px;border:none;background:rgba(230,62,109,0.15);color:#E63E6D;font-size:13px;cursor:pointer;" onclick="showDeleteMenu(${p.id}, '${p.tg_id||''}')">删除▾</button>
+            </div>
+        </div>`;
+        return `<div class="review-card" id="card-${p.id}">
+            <div class="review-card-header">
+                ${photo}
+                <div class="review-info">
+                    <div class="review-name">${p.name||''} <span style="font-size:11px;color:var(--hint);">${p.number||''}</span></div>
+                    <div class="review-meta">
+                        ${p.category ? `<span>📁 ${p.category}</span>` : ''}
+                        ${p.region ? `<span>📍 ${p.region}</span>` : ''}
+                        ${p.price ? `<span>💰 ${p.price}元</span>` : ''}
+                    </div>
+                    <div style="font-size:11px;color:var(--hint);margin-top:4px;">TG: ${p.tg_id||''}</div>
+                    <div style="font-size:11px;color:var(--hint);">${p.created_at||''}</div>
+                </div>
+            </div>
+            ${actions}
+        </div>`;
+    }
+
+    function loadProfiles(status, containerId) {
+        const el = document.getElementById(containerId);
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/profiles?status=${status}&tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (!data.profiles || !data.profiles.length) { el.innerHTML='<div class="empty">暂无内容</div>'; return; }
+                el.innerHTML = data.profiles.map(p => buildReviewCard(p, status===0)).join('');
+                if (status===0) {
+                    const badge = document.getElementById('badge-pending');
+                    if (badge) badge.textContent = data.profiles.length;
+                }
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function approve(id) {
+        fetch(`/api/admin/approve/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok'){ toast('✅ 已通过'); removeCard(id); }
+                else toast('操作失败: '+d.message);
+            });
+    }
+    function reject(id) {
+        fetch(`/api/admin/reject/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok'){ toast('❌ 已驳回'); removeCard(id); }
+                else toast('操作失败: '+d.message);
+            });
+    }
+    function toggleVerify(id, cur) {
+        fetch(`/api/admin/verify/${id}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID, verified:!cur}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok') { toast((!cur)?'✅ 已认证':'取消认证'); switchTab('approved'); }
+            });
+    }
+    function deleteProfile(id) {
+        if (!confirm('确认删除该资料？')) return;
+        fetch(`/api/admin/profile/${id}`, { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID}) })
+            .then(r=>r.json()).then(d=>{
+                if(d.status==='ok') { toast('已删除'); removeCard(id); }
+            });
+    }
+    function removeCard(id) {
+        const el = document.getElementById('card-'+id);
+        if(el){ el.style.transition='opacity 0.3s'; el.style.opacity='0'; setTimeout(()=>el.remove(), 300); }
+        const badge = document.getElementById('badge-pending');
+        if(badge && badge.textContent) badge.textContent = Math.max(0, parseInt(badge.textContent||0)-1) || '';
+    }
+    function viewProfile(id) { location.href = `/profile_detail/${id}?tg_id=${TG_ID}`; }
+
+    function loadUsers() {
+        const el = document.getElementById('users-list');
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/users?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                if (!data.users || !data.users.length) { el.innerHTML='<div class="empty">暂无用户</div>'; return; }
+                el.innerHTML = data.users.map(u => {
+                    const roleClass = {admin:'role-admin',user:'role-user',client:'role-client'}[u.role]||'role-client';
+                    return `<div class="user-card">
+                        <div class="user-avatar">${(u.first_name||u.username||'?')[0].toUpperCase()}</div>
+                        <div class="user-info">
+                            <div class="user-name">${u.first_name||''} ${u.username ? '@'+u.username : ''}</div>
+                            <div class="user-id">TG ID: ${u.tg_id}</div>
+                        </div>
+                        <select class="role-select" onchange="setRole('${u.tg_id}', this.value)">
+                            <option value="client" ${u.role==='client'?'selected':''}>客户</option>
+                            <option value="user" ${u.role==='user'?'selected':''}>用户</option>
+                            <option value="admin" ${u.role==='admin'?'selected':''}>管理员</option>
+                        </select>
+                    </div>`;
+                }).join('');
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function setRole(tid, role) {
+        fetch('/api/admin/set_role', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tg_id:TG_ID, target_tg_id:tid, role:role}) })
+            .then(r=>r.json()).then(d=>{ toast(d.status==='ok' ? '✅ 角色已更新' : '操作失败'); });
+    }
+
+    function loadSettings() {
+        fetch(`/api/admin/settings?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                // Branding
+                const appNameEl = document.getElementById('app-name-input');
+                const priceUnitEl = document.getElementById('price-unit-input');
+                const adminContactEl = document.getElementById('admin-contact-input');
+                if (appNameEl) appNameEl.value = data.app_name || '';
+                if (priceUnitEl) priceUnitEl.value = data.price_unit || '';
+                if (adminContactEl) adminContactEl.value = data.admin_contact || '';
+
+                // Verify desc
+                const vdEl = document.getElementById('verify-desc-input');
+                if (vdEl) vdEl.value = data.verify_description || '';
+
+                // Form fields
+                const fields = data.form_fields || {};
+                const FIELD_LABELS = {name:'姓名',price:'价格',region:'地区',district:'区域',category:'分类',tags:'标签',contact:'联系方式',description:'简介',photos:'照片'};
+                const togglesEl = document.getElementById('field-toggles');
+                togglesEl.innerHTML = Object.entries(FIELD_LABELS).map(([k,v]) => {
+                    const on = fields[k] !== false;
+                    return `<div class="settings-row">
+                        <span class="settings-label">${v}</span>
+                        <div class="toggle ${on?'on':''}" id="toggle-${k}" onclick="toggleField('${k}')">
+                            <div class="toggle-dot"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // Nav tabs
+                const navTabsEl = document.getElementById('nav-tabs-input');
+                navTabsEl.value = (data.nav_tabs||[]).join(',');
+
+                // Notice
+                const noticeEl = document.getElementById('notice-input');
+                noticeEl.value = data.notice || '';
+            });
+    }
+
+    function saveBranding() {
+        const appName = document.getElementById('app-name-input').value.trim();
+        const priceUnit = document.getElementById('price-unit-input').value.trim();
+        const adminContact = document.getElementById('admin-contact-input').value.trim();
+        fetch('/api/admin/settings', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, app_name:appName, price_unit:priceUnit, admin_contact:adminContact})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 品牌设置已保存':'保存失败'); });
+    }
+
+    const fieldState = {};
+    function toggleField(key) {
+        const el = document.getElementById('toggle-'+key);
+        const on = el.classList.toggle('on');
+        fieldState[key] = on;
+        fetch('/api/admin/settings', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, form_fields:{[key]:on}})
+        }).then(r=>r.json()).then(d=>{ if(d.status==='ok') toast('已更新'); });
+    }
+
+    function saveNavTabs() {
+        const val = document.getElementById('nav-tabs-input').value.trim();
+        const tabs = val.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+        fetch('/api/admin/nav', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, nav_tabs:tabs})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 导航标签已保存':'保存失败'); });
+    }
+
+    function saveNotice() {
+        const val = document.getElementById('notice-input').value.trim();
+        fetch('/api/admin/announcement', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, content:val})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 公告已发布':'发布失败'); });
+    }
+
+    function saveVerifyDesc() {
+        const val = document.getElementById('verify-desc-input').value.trim();
+        fetch('/api/admin/settings', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, verify_description:val})
+        }).then(r=>r.json()).then(d=>{ toast(d.status==='ok'?'✅ 已保存':'保存失败'); });
+    }
+
+    function setPin(id, pinType) {
+        const labels = ['不置顶','长久置顶','流动置顶'];
+        fetch(`/api/admin/pin/${id}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, pin_type:pinType})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('✅ 置顶设置：'+labels[pinType]); switchTab('approved'); }
+            else toast('操作失败');
+        });
+    }
+
+    function showDeleteMenu(id, tgId) {
+        const choice = confirm(`确认删除该资料？\n\n点击「确定」仅删除\n点击「取消」后可选删除+拉黑`);
+        if (choice) {
+            deleteProfile(id, false);
+        } else {
+            if (confirm(`是否同时拉黑上传者？\nTG ID: ${tgId}\n（拉黑后该用户无法继续投稿）`)) {
+                deleteProfile(id, true);
+            }
+        }
+    }
+
+    function deleteProfile(id, withBlacklist) {
+        fetch(`/api/admin/profile/${id}`, {
+            method:'DELETE', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, blacklist: !!withBlacklist})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') {
+                toast(withBlacklist ? '已删除并拉黑用户' : '已删除');
+                removeCard(id);
+            }
+        });
+    }
+
+    function loadBlacklist() {
+        const el = document.getElementById('blacklist-list');
+        el.innerHTML = '<div class="empty">加载中...</div>';
+        fetch(`/api/admin/blacklisted_users?tg_id=${TG_ID}`)
+            .then(r=>r.json())
+            .then(data=>{
+                const list = data.blacklisted_users || [];
+                if (!list.length) { el.innerHTML='<div class="empty">黑名单为空</div>'; return; }
+                el.innerHTML = list.map(u => `<div class="blacklist-card">
+                    <div class="bl-info">
+                        <div class="bl-name">TG ID: ${u.tg_id}</div>
+                        <div class="bl-meta">拉黑时间：${u.date||'未知'}</div>
+                    </div>
+                    <button style="padding:8px 12px;border-radius:8px;border:none;background:rgba(230,62,109,0.15);color:#E63E6D;font-size:12px;cursor:pointer;" onclick="unblacklist('${u.tg_id}')">解除</button>
+                </div>`).join('');
+            }).catch(()=>{ el.innerHTML='<div class="empty">加载失败</div>'; });
+    }
+
+    function blacklistManual() {
+        const tid = document.getElementById('bl-tg-input').value.trim();
+        if (!tid) { toast('请输入 Telegram ID'); return; }
+        fetch('/api/admin/blacklist_user', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID, target_tg_id:tid})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('✅ 已拉黑'); document.getElementById('bl-tg-input').value=''; loadBlacklist(); }
+            else toast('操作失败: '+(d.message||''));
+        });
+    }
+
+    function unblacklist(tid) {
+        if (!confirm('确认解除拉黑？')) return;
+        fetch(`/api/admin/blacklist_user/${tid}`, {
+            method:'DELETE', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({tg_id:TG_ID})
+        }).then(r=>r.json()).then(d=>{
+            if(d.status==='ok') { toast('已解除拉黑'); loadBlacklist(); }
+            else toast('操作失败');
+        });
+    }
+
+    // 初始加载
+    loadProfiles(0, 'pending-list');
+    loadSettings();
+</script>
+</body>
+</html>
