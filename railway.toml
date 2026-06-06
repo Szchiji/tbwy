@@ -3,6 +3,6 @@ builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "npm run db:push && npm start"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

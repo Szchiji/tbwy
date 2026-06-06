@@ -48,12 +48,17 @@ npm run start
 ### Railway
 
 - 创建 PostgreSQL 服务，获得 `DATABASE_URL`
-- 在 Web 服务配置同样的环境变量
-- `Procfile` 使用：
+- 在 Web 服务配置环境变量（变量名需与代码一致，见下方「环境变量」）
+- 部署使用 `railway.toml`（Nixpacks）或 `Procfile`，启动命令会在应用启动前自动执行
+  `prisma db push` 同步数据库结构：
 
 ```procfile
-web: npm start
+web: npm run db:push && npm start
 ```
+
+> 注意：本项目使用的变量名为 `TELEGRAM_BOT_TOKEN`、`MY_CHAT_ID`、`ADMIN_KEY`、
+> `NEXTAUTH_SECRET`、`BASE_URL`、`NEXT_PUBLIC_BOT_USERNAME`、`DATABASE_URL`。
+> 请勿使用 `BOT_TOKEN`、`ADMIN_IDS`、`CORS_ORIGINS`、`LOG_LEVEL` 等其它名称。
 
 ## 环境变量
 
